@@ -86,8 +86,7 @@ void DaliGateway::webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, s
             return;
         }
         printf("Received: %s\n", doc["type"].as<String>());
-        sendJson(doc);
-        //handleData(num, doc);
+        handleData(0, doc);
         break;
     }
 
@@ -101,29 +100,29 @@ void DaliGateway::webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, s
     }
 }
 
-void DaliGateway::handleData(uint8_t num, JsonDocument doc)
+void DaliGateway::handleData(uint8_t num, JsonDocument &doc)
 {
-    // uint8_t line = doc["data"]["line"];
+    uint8_t line = doc["data"]["line"];
 
-    // // {"data":
-    // //     {"daliData":[255,6],"line":0,"mode":
-    // //         {"priority":4,"sendTwice":false,"waitForAnswer":false},
-    // //     "numberOfBits":16},
-    // // "type":"daliFrame"}
-    // if (doc["type"] != "daliFrame")
-    //     return; // we only handle dali frames
+    // {"data":
+    //     {"daliData":[255,6],"line":0,"mode":
+    //         {"priority":4,"sendTwice":false,"waitForAnswer":false},
+    //     "numberOfBits":16},
+    // "type":"daliFrame"}
+    if (doc["type"] != "daliFrame")
+        return; // we only handle dali frames
 
-    // if(doc["data"]["line"] >= masters.size()) {
-    //     sendAnswer(num, 5, 0);
-    //     return;
-    // }
+    if(doc["data"]["line"] >= masters.size()) {
+        sendAnswer(num, 5, 0);
+        return;
+    }
 
-    // Dali::Frame frame;
-    // frame.size = doc["data"]["numberOfBits"];
-    // frame.flags = DALI_FRAME_FORWARD;
+    Dali::Frame frame;
+    frame.size = doc["data"]["numberOfBits"];
+    frame.flags = DALI_FRAME_FORWARD;
 
-    // uint32_t ref = masters[line]->sendRaw(frame);
-    // sent.push_back(ref);
+    uint32_t ref = masters[line]->sendRaw(frame);
+    sent.push_back(ref);
 }
 
 void DaliGateway::receivedMonitor(uint8_t line, Dali::Frame frame)
@@ -176,9 +175,9 @@ void DaliGateway::sendJson(JsonDocument &doc, bool appendTimeSignature)
         doc["timeSignature"]["timestamp"] = esp_timer_get_time() / 1000.0;
         doc["timeSignature"]["counter"] = 0; //counter++;
     }
-    // String jsonString;
-    // serializeJson(doc, jsonString);
-    // webSocket.broadcastTXT(jsonString);
+    String jsonString;
+    serializeJson(doc, jsonString);
+    webSocket.broadcastTXT(jsonString);
 }
 
 void DaliGateway::sendAnswer(uint8_t line, uint8_t status, uint8_t answer)

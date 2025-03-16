@@ -18,7 +18,7 @@ class DaliGateway
         void setup();
         void loop();
         void addMaster(Dali::Master *master);
-        void handleData(uint8_t num, JsonDocument doc);
+        void handleData(uint8_t num, JsonDocument &doc);
         void receivedMonitor(uint8_t line, Dali::Frame frame);
 
         void sendJson(JsonDocument &doc, bool appendTimeSignature = true);
