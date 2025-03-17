@@ -149,6 +149,7 @@ void DaliGateway::receivedMonitor(uint8_t line, Dali::Frame frame)
     doc["data"]["timestamp"] = frame.timestamp / 1000.0;
     doc["data"]["bits"] = frame.size;
     doc["data"]["line"] = line;
+    doc["data"]["isEcho"] = (frame.flags & DALI_FRAME_ECHO) ? true : false;
 
     uint8_t indexStart = 1;
     if(frame.size == 16)
