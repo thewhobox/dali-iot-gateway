@@ -391,6 +391,11 @@
         data.data.data = [ 0b10011111, 0];
         data.data.timestamp += 0.584;
         addLogEntry(data); // OFF G15
+
+        
+        data.data.data = [ 254, 0];
+        data.data.timestamp += 0.002;
+        addLogEntry(data); // OFF G15
     }
 
     function parse8bit(frame)
@@ -409,7 +414,7 @@
 
     function parse16bit(frame)
     {
-        console.log("parsing 16bit");
+        console.log("parsing 16bit", frame);
         let response = {
             isEcho: frame.data.isEcho,
             line: frame.data.line,
@@ -449,6 +454,8 @@
         {
             type = firstByte >> 5;
         }
+
+        console.log("Type", type);
 
 
         if(type == frame_special)
@@ -518,6 +525,14 @@
                 case frame_group:
                     response.address = "G" +((firstByte >> 1) & 0b1111)
                     break;
+
+                case frame_broadcast:
+                    response.address = "Bcast";
+                    break;
+
+                default:
+                    response.address = "Unknown";
+                    break;
             }
 
             if(firstByte & 0b1)
@@ -582,6 +597,8 @@
         const date = timestamp.toLocaleDateString();
         let delta = lastTimestamp ? timestamp - lastTimestamp : "";
         lastTimestamp = timestamp;
+
+        console.log(frame, frameResponse);
 
         let rowClass = "";
         if (frameResponse.commandDescription.includes("Error")) rowClass = "error";
