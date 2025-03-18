@@ -331,64 +331,67 @@
         };
     }
 
-    let data = { type: "daliMonitor",
-        data: {
-            tick_us: 86454,
-            timestamp: 0,
-            bits: 16,
-            data: [ 0, 145 ],
-            line: 0,
-            isEcho: true
-        },
-        timeSignature: {
-            timestamp: 500,
-            counter: 481
-        }
-    };
+    function addTestData()
+    {
+        let data = { type: "daliMonitor",
+            data: {
+                tick_us: 86454,
+                timestamp: 0,
+                bits: 16,
+                data: [ 0, 145 ],
+                line: 0,
+                isEcho: true
+            },
+            timeSignature: {
+                timestamp: 500,
+                counter: 481
+            }
+        };
 
-    addLogEntry(data);
-    data.data.bits = 8;
-    data.data.data = [ 255 ];
-    data.data.isEcho = false;
-    data.data.timestamp += 0.015;
-    addLogEntry(data);
-    data.data.bits = 24;
-    data.data.data = [ 255, 255, 0 ];
-    data.data.timestamp += 0.017;
-    addLogEntry(data);
-    data.data.bits = 16;
-    data.data.data = [ 0b01111111, 0];
-    data.data.timestamp += 0.300;
-    addLogEntry(data);
-    data.data.data = [ 0b10011111, 0];
-    data.data.timestamp += 0.584;
-    addLogEntry(data);
+        addLogEntry(data); // ARC 5.1%
+        data.data.bits = 8;
+        data.data.data = [ 255 ];
+        data.data.isEcho = false;
+        data.data.timestamp += 0.015;
+        addLogEntry(data); // ANSWER
+        data.data.bits = 24;
+        data.data.data = [ 255, 255, 0 ];
+        data.data.timestamp += 0.017;
+        addLogEntry(data); // 24bit unknown
+        data.data.bits = 16;
+        data.data.data = [ 0b01111111, 0];
+        data.data.timestamp += 0.300;
+        addLogEntry(data); // OFF A63
+        data.data.data = [ 0b10011111, 0];
+        data.data.timestamp += 0.584;
+        addLogEntry(data); // OFF G15
 
-    data.data.data = [ 0b10100101, 0];
-    data.data.timestamp += 0.15;
-    addLogEntry(data);
-    data.data.timestamp += 0.15;
-    addLogEntry(data);
-    data.data.data = [ 0b10100111, 0];
-    data.data.timestamp += 0.15;
-    addLogEntry(data);
-    data.data.timestamp += 0.15;
-    addLogEntry(data);
-    data.data.data = [0b11000001, 8];
-    data.data.timestamp += 0.287;
-    addLogEntry(data);
-    data.data.data = [0b11111111, 0b11100000];
-    data.data.timestamp += 0.012;
-    addLogEntry(data);
-    data.data.data = [0b11000001, 8];
-    data.data.timestamp += 0.287;
-    addLogEntry(data);
-    data.data.data = [0b11111111, 0b11100010];
-    data.data.timestamp += 0.012;
-    addLogEntry(data);
-    data.data.data = [ 0b10011111, 0];
-    data.data.timestamp += 0.584;
-    addLogEntry(data);
+        data.data.data = [ 0b10100101, 0];
+        data.data.timestamp += 0.15;
+        addLogEntry(data); // INIT all
+        data.data.timestamp += 0.15;
+        addLogEntry(data); // INIT all
+        data.data.data = [ 0b10100111, 0];
+        data.data.timestamp += 0.15;
+        addLogEntry(data); // RAND
+        data.data.timestamp += 0.15;
+        addLogEntry(data); // RAND
+        data.data.data = [0b11000001, 8];
+        data.data.timestamp += 0.287;
+        addLogEntry(data); // ENABLE DT8
+        data.data.data = [0b11111111, 0b11100000];
+        data.data.timestamp += 0.012;
+        addLogEntry(data); // SET TEMP Y-COORD
+        data.data.data = [0b11000001, 8];
+        data.data.timestamp += 0.287;
+        addLogEntry(data); // ENABLE DT8
+        data.data.data = [0b11111111, 0b11100010];
+        data.data.timestamp += 0.012;
+        addLogEntry(data); // ACTIVATE
+        data.data.data = [ 0b10011111, 0];
+        data.data.timestamp += 0.584;
+        addLogEntry(data); // OFF G15
+    }
 
     function parse8bit(frame)
     {
