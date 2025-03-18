@@ -1,10 +1,20 @@
 {
     "name": "dali-iot-gateway",
     "version": "0.0.1",
-    "dependencies": {
-        "Links2004/WebSockets": "^2.6.1",
-        "bblanchon/ArduinoJson": "^7.3.1"
-    },
+    "dependencies": [
+        {
+            "owner": "Links2004",
+            "name": "WebSockets",
+            "version": "^2.6.1",
+            "platforms": ["esp32"]
+        },
+        {
+            "owner": "bblanchon",
+            "name": "ArduinoJson",
+            "version": "^7.3.1",
+            "platforms": ["esp32"]
+        }
+    ],
     "description": "iot gateway for dali",
     "homepage": "https://openknx.de",
     "authors": [
