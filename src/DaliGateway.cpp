@@ -146,7 +146,7 @@ void DaliGateway::receivedMonitor(uint8_t line, Dali::Frame frame)
     JsonDocument doc;
     doc["type"] = "daliMonitor";
     doc["data"]["tick_us"] = 86454; // TODO set this correct
-    doc["data"]["timestamp"] = frame.timestamp / 1000.0;
+    doc["data"]["timestamp"] = frame.timestamp / 1000000.0;
     doc["data"]["bits"] = frame.size;
     doc["data"]["line"] = line;
     doc["data"]["isEcho"] = (frame.flags & DALI_FRAME_ECHO) ? true : false;
@@ -173,7 +173,7 @@ void DaliGateway::sendJson(JsonDocument &doc, bool appendTimeSignature)
 {
     if(appendTimeSignature)
     {
-        doc["timeSignature"]["timestamp"] = esp_timer_get_time() / 1000.0;
+        doc["timeSignature"]["timestamp"] = esp_timer_get_time() / 1000000.0;
         doc["timeSignature"]["counter"] = 0; //counter++;
     }
     String jsonString;
