@@ -325,6 +325,9 @@
                 if (logEntry.type === "daliMonitor" && logEntry.data) {
                     addLogEntry(logEntry);
                 }
+                if(logEntry.type == "info") {
+                    offsetTimestamp = (Date.now() / 1000) - logEntry.timeSignature.timestamp;
+                }
             } catch (error) {
                 console.error("Fehler bei Nachricht:", error);
             }
@@ -333,17 +336,32 @@
 
     function addTestData()
     {
+        let fakeTimeStamp = 1027480.87;
+        offsetTimestamp = (Date.now() / 1000) - fakeTimeStamp;
+
+        var fake1 = new Date(fakeTimeStamp * 1000);
+        var time = `${fake1.toLocaleTimeString()}.${fake1.getMilliseconds().toString().padStart(3, '0')}`;
+        var date = fake1.toLocaleDateString();
+        console.log(time, date);
+        console.log(offsetTimestamp);
+        
+        var fake1 = new Date((fakeTimeStamp + offsetTimestamp) * 1000);
+        time = `${fake1.toLocaleTimeString()}.${fake1.getMilliseconds().toString().padStart(3, '0')}`;
+        date = fake1.toLocaleDateString();
+        console.log(time, date);
+
+
         let data = { type: "daliMonitor",
             data: {
                 tick_us: 86454,
-                timestamp: 0,
+                timestamp: fakeTimeStamp,
                 bits: 16,
                 data: [ 0, 145 ],
                 line: 0,
                 isEcho: true
             },
             timeSignature: {
-                timestamp: 500,
+                timestamp: 0,
                 counter: 481
             }
         };
@@ -551,18 +569,10 @@
     }
 
     function addLogEntry(frame) {
-        if(frame.type == "info")
-        {
-            offsetTimestamp = (Date.now() / 1000) - frame.timeSignature.timestamp;
-        }
-
-        if(frame.type != "daliMonitor") return;
-
         let tableBody = document.getElementById("logTable").getElementsByTagName("tbody")[0];
         let row = tableBody.insertRow(0);
         
         let frameResponse = {};
-        frameResponse.address = "Unknown";
 
         switch(frame.data.bits)
         {
@@ -576,6 +586,7 @@
                 break;
 
             default:
+                console.log("Unknown frame length", frame.data.bits);
                 lastExtended = -1;
                 frameResponse = {
                     isEcho: frame.data.isEcho,
@@ -591,6 +602,7 @@
 
         console.log(frame.data.data);
         frameResponse.hexData = frame.data.data.map(byte => byte.toString(16).padStart(2, '0')).join(' ').toUpperCase();
+        console.log(frameResponse.hexData);
         
         var timestamp = new Date((frameResponse.timestamp + offsetTimestamp) * 1000);
         const time = `${timestamp.toLocaleTimeString()}.${timestamp.getMilliseconds().toString().padStart(3, '0')}`;
