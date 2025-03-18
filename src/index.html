@@ -538,7 +538,7 @@
     function addLogEntry(frame) {
         if(frame.type == "info")
         {
-            offsetTimestamp = (Date.now() / 1000) - frame.timeSignature;
+            offsetTimestamp = (Date.now() / 1000) - frame.timeSignature.timestamp;
         }
 
         if(frame.type != "daliMonitor") return;
@@ -547,6 +547,7 @@
         let row = tableBody.insertRow(0);
         
         let frameResponse = {};
+        frameResponse.address = "Unknown";
 
         switch(frame.data.bits)
         {
