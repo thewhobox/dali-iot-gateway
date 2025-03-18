@@ -24,6 +24,7 @@
         }
         th {
             background-color: #f2f2f2;
+            width: 1%;
         }
         tr:hover {
             background-color: #f9f9f9;
@@ -71,6 +72,27 @@
             position: relative;
             padding: 10px 0;
         }
+
+        
+        @media (max-width: 700px) {
+            table th:nth-child(1),
+            table td:nth-child(1),
+            table th:nth-child(6),
+            table td:nth-child(6),
+            table th:nth-child(7),
+            table td:nth-child(7) {
+                display: none;
+            }
+        }
+        
+        @media (max-width: 500px) {
+            table th:nth-child(2),
+            table td:nth-child(2),
+            table th:nth-child(3),
+            table td:nth-child(3) {
+                display: none;
+            }
+        }
     </style>
 </head>
 <body>
@@ -88,11 +110,10 @@
                 <th>Line</th>
                 <th>Hex Data</th>
                 <th>Address</th>
-                <th>Command</th>
+                <th style="width: auto !important">Command</th>
                 <th>Time</th>
                 <th>Date</th>
                 <th>Delta (MS)</th>
-                <th>Comment</th>
             </tr>
         </thead>
         <tbody></tbody>
@@ -409,9 +430,14 @@
         data.data.data = [ 0b10011111, 0];
         data.data.timestamp += 0.584;
         addLogEntry(data); // OFF G15
-
         
         data.data.data = [ 254, 0];
+        data.data.timestamp += 0.002;
+        addLogEntry(data); // ARC 0 Bcast
+        
+        
+        data.data.data = [ 254, 0];
+        data.data.framingError = true;
         data.data.timestamp += 0.002;
         addLogEntry(data); // OFF G15
     }
@@ -574,34 +600,47 @@
         
         let frameResponse = {};
 
-        switch(frame.data.bits)
+        if(frame.data.framingError || (frame.data.bits != 8 && frame.data.bits != 16 && frame.data.bits != 24 && frame.data.bits != 25))
         {
-            case 8:
-                lastExtended = -1;
-                frameResponse = parse8bit(frame);
-                break;
+            frameResponse = {
+                isEcho: frame.data.isEcho,
+                line: frame.data.line,
+                address: "Error",
+                commandDescription: "Framing Error",
+                timestamp: frame.data.timestamp,
+                error: true
+            };
+        }
+        else
+        {
+            switch(frame.data.bits)
+            {
+                case 8:
+                    lastExtended = -1;
+                    frameResponse = parse8bit(frame);
+                    break;
 
-            case 16:
-                frameResponse = parse16bit(frame);
-                break;
+                case 16:
+                    frameResponse = parse16bit(frame);
+                    break;
 
-            default:
-                console.log("Unknown frame length", frame.data.bits);
-                lastExtended = -1;
-                frameResponse = {
-                    isEcho: frame.data.isEcho,
-                    line: frame.data.line,
-                    address: "",
-                    commandDescription: "Unknown",
-                    timestamp: frame.data.timestamp,
-                    error: frame.data.framingError ? frame.data.framingError : false
-                };
-                break;
+                default:
+                    console.log("Unknown frame length", frame.data.bits);
+                    lastExtended = -1;
+                    frameResponse = {
+                        isEcho: frame.data.isEcho,
+                        line: frame.data.line,
+                        address: "",
+                        commandDescription: "Unknown",
+                        timestamp: frame.data.timestamp,
+                    };
+                    break;
 
+            }
         }
 
         console.log(frame.data.data);
-        frameResponse.hexData = frame.data.data.map(byte => byte.toString(16).padStart(2, '0')).join(' ').toUpperCase();
+        frameResponse.hexData = frame.data.data.map(byte => byte.toString(16).padStart(2, '0')).join('#').toUpperCase();
         console.log(frameResponse.hexData);
         
         var timestamp = new Date((frameResponse.timestamp + offsetTimestamp) * 1000);
@@ -613,7 +652,7 @@
         console.log(frame, frameResponse);
 
         let rowClass = "";
-        if (frameResponse.commandDescription.includes("Error")) rowClass = "error";
+        if (frameResponse.address.includes("Error")) rowClass = "error";
         else if (frameResponse.commandDescription.includes("Answer")) rowClass = "response";
         else if (frameResponse.address.includes("Special")) rowClass = "special";
         else if (frameResponse.address.includes("Extended")) rowClass = "extended";
@@ -625,13 +664,12 @@
         row.innerHTML = `
             <td>${frameResponse.isEcho ? "Gateway" : "Dali Bus"}</td>
             <td>L${frameResponse.line}</td>
-            <td>${frameResponse.hexData}</td>
+            <td>${frameResponse.hexData.replaceAll("#", "&nbsp;")}</td>
             <td>${frameResponse.address}</td>
             <td>${frameResponse.commandDescription}</td>
             <td>${time}</td>
             <td>${date}</td>
             <td>${delta}</td>
-            <td>${frameResponse.framingError ? "Framing Error" : "No Error"}</td>
         `;
         
         if (tableBody.rows.length > maxLogEntries) {
