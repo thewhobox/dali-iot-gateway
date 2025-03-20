@@ -1,17 +1,80 @@
 #include "DaliGateway.h"
 
+#include "index.h"
+
+static esp_err_t ws_handler(httpd_req_t *req);
+static esp_err_t web_handler(httpd_req_t *req);
+
 void DaliGateway::setup()
 {
-    webSocket.begin();
-    printf("WebSocket server started\n");
-    webSocket.onEvent([this](uint8_t num, WStype_t type, uint8_t *payload, size_t length) {
-        this->webSocketEvent(num, type, payload, length);
-    });
+    httpd_uri ws = {
+        .uri = "/",
+        .method = HTTP_GET,
+        .handler = ws_handler,
+        .user_ctx = this,
+        .is_websocket = true
+    };
+    httpd_uri web = {
+        .uri = "/dali",
+        .method = HTTP_GET,
+        .handler = web_handler,
+        .user_ctx = this
+    };
+
+    #ifndef IOT_GW_USE_WEBUI
+    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+
+    if (httpd_start(&server, &config) == ESP_OK) {
+        printf("Registering URI handlers\n");
+        httpd_register_uri_handler(server, &ws);
+        httpd_register_uri_handler(server, &web);
+    } else {
+        printf("Failed to start the server\n");
+    }
+    #else
+    openknxWebUI.addHandler(ws);
+    WebService _web = {
+        .uri = web,
+        .name = "Dali Monitor"
+    };
+    openknxWebUI.addService(_web);
+    #endif
 }
 
 void DaliGateway::loop()
 {
-    webSocket.loop();
+    
+}
+
+static void ws_async_send(void *arg)
+{
+    httpd_ws_frame_t ws_pkt;
+    struct async_resp_arg *resp_arg = (async_resp_arg*)arg;
+    httpd_handle_t hd = resp_arg->hd;
+    int fd = resp_arg->fd;
+
+    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+    ws_pkt.payload = (uint8_t*)resp_arg->buffer;
+    ws_pkt.len = strlen(resp_arg->buffer+1);
+    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+    
+    static size_t max_clients = CONFIG_LWIP_MAX_LISTENING_TCP;
+    size_t fds = max_clients;
+    int client_fds[max_clients];
+
+    esp_err_t ret = httpd_get_client_list(hd, &fds, client_fds);
+
+    if (ret != ESP_OK) {
+        return;
+    }
+
+    for (int i = 0; i < fds; i++) {
+        int client_info = httpd_ws_get_fd_info(hd, client_fds[i]);
+        if (client_info == HTTPD_WS_CLIENT_WEBSOCKET) {
+            httpd_ws_send_frame_async(hd, client_fds[i], &ws_pkt);
+        }
+    }
+    free(resp_arg);
 }
 
 void DaliGateway::addMaster(Dali::Master *master)
@@ -24,84 +87,80 @@ void DaliGateway::addMaster(Dali::Master *master)
     });
 }
 
-void DaliGateway::webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
+const char* TAG = "dali-iot-gateway";
+static esp_err_t ws_handler(httpd_req_t *req)
 {
-    switch (type)
-    {
-    case WStype_CONNECTED:
-    {
-        printf("WebSocket connected\n");
-        JsonDocument doc;
-        doc["type"] = "info";
-        doc["data"]["name"] = "dali-iot";
-        doc["data"]["version"] = "v1.2.0/1.0.9";
-        doc["data"]["tier"] = "plus";
-        doc["data"]["emergencyLight"] = false;
-        doc["data"]["errors"] = JsonObject();
-        doc["data"]["descriptor"]["lines"] = masters.size();
-        doc["data"]["descriptor"]["bufferSize"] = 32;
-        doc["data"]["descriptor"]["tickResolution"] = 1978; // TODO what does this?
-        doc["data"]["descriptor"]["maxYnFrameSize"] = 32;
-        doc["data"]["descriptor"]["deviceListSpecifier"] = true;
-        doc["data"]["descriptor"]["protocolVersion"] = "1.0";
-        doc["data"]["device"]["serial"] = 1234567890;
-        doc["data"]["device"]["gtin"] = 1234567890;
-        doc["data"]["device"]["pcb"] = "9a";
-        doc["data"]["device"]["articleNumber"] = 1234567890;
-        doc["data"]["device"]["articleInfo"] = "";
-        doc["data"]["device"]["productionYear"] = 2024;
-        doc["data"]["device"]["productionWeek"] = 31;
+    DaliGateway *gw = (DaliGateway *)req->user_ctx;
 
-        counter = 0;
-        sendJson(doc);
-        break;
+    if(req->method == HTTP_GET)
+    {
+        // TODO redirect every request which is not a websocket upgrade
+        #ifndef IOT_GW_USE_WEBUI
+        // redirect to /dali
+        #else
+        // redirect to WEBUI_BASE_URI
+        #endif
+        return ESP_OK;
     }
 
-    case WStype_PING:
-        // pong will be send automatically
-        // Serial.println("[WSc] get ping");
-        break;
-
-    case WStype_PONG:
-        // answer to a ping we send
-        // Serial.println("[WSc] get pong");
-        break;
-
-    case WStype_DISCONNECTED:
-        printf("WebSocket disconnected\n");
-        // webSocket.close();
-        // webSocket.disconnect();
-        break;
-
-    case WStype_TEXT:
-    {
-        printf("WebSocket text\n");
-        printf("Received: %s\n", payload);
-        JsonDocument doc;
-        DeserializationError error = deserializeJson(doc, payload);
-        if (error)
-        {
-            Serial.print(F("deserializeJson() failed: "));
-            Serial.println(error.c_str());
-            return;
+    httpd_ws_frame_t ws_pkt;
+    uint8_t *buf = NULL;
+    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+    /* Set max_len = 0 to get the frame len */
+    esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "httpd_ws_recv_frame failed to get frame len with %d", ret);
+        return ret;
+    }
+    ESP_LOGI(TAG, "frame len is %d", ws_pkt.len);
+    if (ws_pkt.len) {
+        /* ws_pkt.len + 1 is for NULL termination as we are expecting a string */
+        buf = (uint8_t*)calloc(1, ws_pkt.len + 1);
+        if (buf == NULL) {
+            ESP_LOGE(TAG, "Failed to calloc memory for buf");
+            return ESP_ERR_NO_MEM;
         }
-        printf("Received: %s\n", doc["type"].as<String>());
-        handleData(0, doc);
-        break;
+        ws_pkt.payload = buf;
+        /* Set max_len = ws_pkt.len to get the frame payload */
+        ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "httpd_ws_recv_frame failed with %d", ret);
+            free(buf);
+            return ret;
+        }
+        ESP_LOGI(TAG, "Got packet with message: %s", ws_pkt.payload);
+        gw->handleData(req, ws_pkt.payload);
     }
-
-    case WStype_BIN:
-        Serial.printf("[%u] Binärdaten empfangen\n", num);
-        break;
-
-    default:
-        Serial.printf("Unhandled WebSocket event: %d\n", type);
-        break;
-    }
+    free(buf);
+    return ret;
 }
 
-void DaliGateway::handleData(uint8_t num, JsonDocument &doc)
+static esp_err_t web_handler(httpd_req_t *req)
 {
+    if(req->uri == "/dali")
+    {
+        httpd_resp_set_type(req, "text/html");
+        httpd_resp_send(req, index_html, HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    }
+
+    httpd_resp_send_404(req);
+    return ESP_FAIL;
+}
+
+void DaliGateway::handleData(httpd_req_t *ctx, uint8_t * payload)
+{
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, payload);
+    if (error)
+    {
+        Serial.print(F("deserializeJson() failed: "));
+        Serial.println(error.c_str());
+        return;
+    }
+    printf("Received: %s\n", doc["type"].as<String>());
+
     uint8_t line = doc["data"]["line"];
 
     // {"data":
@@ -113,7 +172,7 @@ void DaliGateway::handleData(uint8_t num, JsonDocument &doc)
         return; // we only handle dali frames
 
     if(doc["data"]["line"] >= masters.size()) {
-        sendAnswer(num, 5, 0);
+        sendAnswer(doc["data"]["line"], 5, 0);
         return;
     }
 
@@ -178,7 +237,7 @@ void DaliGateway::sendJson(JsonDocument &doc, bool appendTimeSignature)
     }
     String jsonString;
     serializeJson(doc, jsonString);
-    webSocket.broadcastTXT(jsonString);
+    sendRawWebsocket(jsonString.c_str());
 }
 
 void DaliGateway::sendAnswer(uint8_t line, uint8_t status, uint8_t answer)
@@ -190,4 +249,21 @@ void DaliGateway::sendAnswer(uint8_t line, uint8_t status, uint8_t answer)
     doc["data"]["daliData"] = answer;
 
     sendJson(doc, false);
+}
+
+void DaliGateway::sendRawWebsocket(const char *data)
+{
+    struct async_resp_arg *resp_arg = (struct async_resp_arg *)malloc(sizeof(struct async_resp_arg));
+
+    #ifndef IOT_GW_USE_WEBUI
+    resp_arg->hd = &server; // the httpd handle
+    #else
+    resp_arg->hd = openknxWebUI.getHandler(); // the httpd handle
+    #endif
+    uint32_t length = strlen(data);
+    char* buffer = (char*)malloc(length+1);
+    memcpy(buffer, data, length);
+    resp_arg->buffer = buffer; // a malloc'ed buffer to transmit
+
+    httpd_queue_work(resp_arg->hd, ws_async_send, resp_arg);
 }
