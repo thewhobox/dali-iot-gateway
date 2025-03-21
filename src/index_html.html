@@ -319,7 +319,7 @@
     }
 
     function connectWebSocket() {
-        socket = new WebSocket("ws://10.20.30.215:80");
+        socket = new WebSocket("ws://" + window.location.hostname + "/");
 
         socket.onopen = function() {
             console.log("WebSocket verbunden");
