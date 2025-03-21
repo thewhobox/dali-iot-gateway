@@ -7,14 +7,14 @@ static esp_err_t web_handler(httpd_req_t *req);
 
 void DaliGateway::setup()
 {
-    httpd_uri ws = {
+    httpd_uri_t ws = {
         .uri = "/",
         .method = HTTP_GET,
         .handler = ws_handler,
         .user_ctx = this,
         .is_websocket = true
     };
-    httpd_uri web = {
+    httpd_uri_t web = {
         .uri = "/dali",
         .method = HTTP_GET,
         .handler = web_handler,
@@ -32,7 +32,12 @@ void DaliGateway::setup()
         printf("Failed to start the server\n");
     }
     #else
-    openknxWebUI.addHandler(ws);
+    WebService _ws = {
+        .uri = ws,
+        .name = "Dali Websocket",
+        .isVisible = false
+    };
+    openknxWebUI.addService(_ws);
     WebService _web = {
         .uri = web,
         .name = "Dali Monitor"
@@ -90,15 +95,23 @@ void DaliGateway::addMaster(Dali::Master *master)
 const char* TAG = "dali-iot-gateway";
 static esp_err_t ws_handler(httpd_req_t *req)
 {
+    printf("IOT URI: %s\n", req->uri);
     DaliGateway *gw = (DaliGateway *)req->user_ctx;
 
     if(req->method == HTTP_GET)
     {
         // TODO redirect every request which is not a websocket upgrade
         #ifndef IOT_GW_USE_WEBUI
-        // redirect to /dali
+        httpd_resp_set_type(req, "text/html");
+        httpd_resp_set_status(req, "301 Moved Permanently");
+        httpd_resp_set_hdr(req, "Location", "/dali");
+        httpd_resp_send(req, NULL, 0);
         #else
         // redirect to WEBUI_BASE_URI
+        httpd_resp_set_type(req, "text/html");
+        httpd_resp_set_status(req, "301 Moved Permanently");
+        httpd_resp_set_hdr(req, "Location", "/start");
+        httpd_resp_send(req, NULL, 0);
         #endif
         return ESP_OK;
     }
@@ -138,6 +151,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
 
 static esp_err_t web_handler(httpd_req_t *req)
 {
+    printf("IOT URI: %s\n", req->uri);
     if(req->uri == "/dali")
     {
         httpd_resp_set_type(req, "text/html");
