@@ -31,7 +31,10 @@ class DaliGateway
         void addMaster(Dali::Master *master);
         void receivedMonitor(uint8_t line, Dali::Frame frame);
         void handleData(httpd_req_t *ctx, uint8_t * payload);
+        
+        void generateInfoMessage();
 
+    private:
         void sendJson(JsonDocument &doc, bool appendTimeSignature = true);
         void sendAnswer(uint8_t num, uint8_t status, uint8_t answer);
         void sendRawWebsocket(const char *data);
