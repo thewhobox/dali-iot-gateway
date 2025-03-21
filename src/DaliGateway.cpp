@@ -100,19 +100,59 @@ static esp_err_t ws_handler(httpd_req_t *req)
 
     if(req->method == HTTP_GET)
     {
-        // TODO redirect every request which is not a websocket upgrade
-        #ifndef IOT_GW_USE_WEBUI
-        httpd_resp_set_type(req, "text/html");
-        httpd_resp_set_status(req, "301 Moved Permanently");
-        httpd_resp_set_hdr(req, "Location", "/dali");
-        httpd_resp_send(req, NULL, 0);
-        #else
-        // redirect to WEBUI_BASE_URI
-        httpd_resp_set_type(req, "text/html");
-        httpd_resp_set_status(req, "301 Moved Permanently");
-        httpd_resp_set_hdr(req, "Location", "/start");
-        httpd_resp_send(req, NULL, 0);
-        #endif
+        char *host = NULL;
+        char *upgrade = NULL;
+        size_t buf_len;
+        buf_len = httpd_req_get_hdr_value_len(req, "Host") + 1;
+        if (buf_len > 1)
+        {
+            host = (char*)malloc(buf_len);
+            if (httpd_req_get_hdr_value_str(req, "Host", host, buf_len) != ESP_OK)
+            {
+                /* if something is wrong we just 0 the whole memory */
+                memset(host, 0x00, buf_len);
+            }
+        }
+        if(host == NULL)
+        {
+            httpd_resp_set_status(req, "400 Bad Request");
+            httpd_resp_send(req, NULL, 0);
+            return ESP_ERR_NOT_FOUND;
+        }
+
+        buf_len = httpd_req_get_hdr_value_len(req, "Upgrade") + 1;
+        if (buf_len > 1)
+        {
+            upgrade = (char*)malloc(buf_len);
+            if (httpd_req_get_hdr_value_str(req, "Upgrade", upgrade, buf_len) != ESP_OK)
+            {
+                /* if something is wrong we just 0 the whole memory */
+                memset(upgrade, 0x00, buf_len);
+            }
+        }
+
+        /* this is no websocket so we redirect it to the startpage */
+        if(upgrade == NULL)
+        {
+            httpd_resp_set_status(req, "302 Found");
+            char *redirect_url = NULL;
+            #ifndef IOT_GW_USE_WEBUI
+            asprintf(&redirect_url, "http://%s/dali", host);
+            #else
+            asprintf(&redirect_url, "http://%s%s", host, openknxWebUI.getBaseUri());
+            #endif
+            httpd_resp_set_hdr(req, "Location", redirect_url);
+            httpd_resp_send(req, NULL, 0);
+
+            free(redirect_url);
+            if(host != NULL)
+                free(host);
+            return ESP_ERR_NOT_ALLOWED;
+        }
+
+        printf("Got new Websocket from %s\n", host);
+        free(host);
+        free(upgrade);
         return ESP_OK;
     }
 
