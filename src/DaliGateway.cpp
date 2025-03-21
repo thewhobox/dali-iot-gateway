@@ -152,7 +152,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
 static esp_err_t web_handler(httpd_req_t *req)
 {
     printf("IOT URI: %s\n", req->uri);
-    if(req->uri == "/dali")
+    if(strcmp(req->uri, "/dali") == 0)
     {
         httpd_resp_set_type(req, "text/html");
         httpd_resp_send(req, index_html, HTTPD_RESP_USE_STRLEN);
