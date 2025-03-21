@@ -27,7 +27,6 @@ class DaliGateway
 
     public:
         void setup();
-        void loop();
         void addMaster(Dali::Master *master);
         void receivedMonitor(uint8_t line, Dali::Frame frame);
         void handleData(httpd_req_t *ctx, uint8_t * payload);

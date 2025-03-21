@@ -46,11 +46,6 @@ void DaliGateway::setup()
     #endif
 }
 
-void DaliGateway::loop()
-{
-    
-}
-
 static void ws_async_send(void *arg)
 {
     httpd_ws_frame_t ws_pkt;
