@@ -50,28 +50,26 @@ static void ws_async_send(void *arg)
 {
     httpd_ws_frame_t ws_pkt;
     struct async_resp_arg *resp_arg = (async_resp_arg*)arg;
-    httpd_handle_t hd = resp_arg->hd;
-    int fd = resp_arg->fd;
-
+    
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
     ws_pkt.payload = (uint8_t*)resp_arg->buffer;
-    ws_pkt.len = strlen(resp_arg->buffer+1);
+    ws_pkt.len = resp_arg->len;
     ws_pkt.type = HTTPD_WS_TYPE_TEXT;
-    
+
     static size_t max_clients = CONFIG_LWIP_MAX_LISTENING_TCP;
     size_t fds = max_clients;
     int client_fds[max_clients];
-
-    esp_err_t ret = httpd_get_client_list(hd, &fds, client_fds);
+    
+    esp_err_t ret = httpd_get_client_list(resp_arg->hd, &fds, client_fds);
 
     if (ret != ESP_OK) {
         return;
     }
 
     for (int i = 0; i < fds; i++) {
-        int client_info = httpd_ws_get_fd_info(hd, client_fds[i]);
+        int client_info = httpd_ws_get_fd_info(resp_arg->hd, client_fds[i]);
         if (client_info == HTTPD_WS_CLIENT_WEBSOCKET) {
-            httpd_ws_send_frame_async(hd, client_fds[i], &ws_pkt);
+            httpd_ws_send_frame_async(resp_arg->hd, client_fds[i], &ws_pkt);
         }
     }
     free(resp_arg);
@@ -87,10 +85,8 @@ void DaliGateway::addMaster(Dali::Master *master)
     });
 }
 
-const char* TAG = "dali-iot-gateway";
 static esp_err_t ws_handler(httpd_req_t *req)
 {
-    printf("IOT URI: %s\n", req->uri);
     DaliGateway *gw = (DaliGateway *)req->user_ctx;
 
     if(req->method == HTTP_GET)
@@ -159,26 +155,26 @@ static esp_err_t ws_handler(httpd_req_t *req)
     /* Set max_len = 0 to get the frame len */
     esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "httpd_ws_recv_frame failed to get frame len with %d", ret);
+        printf("ws_handler: httpd_ws_recv_frame failed to get frame len with %d\n", ret);
         return ret;
     }
-    ESP_LOGI(TAG, "frame len is %d", ws_pkt.len);
+    printf("ws_handler: frame len is %d and type is \n", ws_pkt.len, ws_pkt.type);
     if (ws_pkt.len) {
         /* ws_pkt.len + 1 is for NULL termination as we are expecting a string */
         buf = (uint8_t*)calloc(1, ws_pkt.len + 1);
         if (buf == NULL) {
-            ESP_LOGE(TAG, "Failed to calloc memory for buf");
+            printf("ws_handler: Failed to calloc memory for buf\n");
             return ESP_ERR_NO_MEM;
         }
         ws_pkt.payload = buf;
         /* Set max_len = ws_pkt.len to get the frame payload */
         ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
         if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "httpd_ws_recv_frame failed with %d", ret);
+            printf("ws_handler: httpd_ws_recv_frame failed with %d\n", ret);
             free(buf);
             return ret;
         }
-        ESP_LOGI(TAG, "Got packet with message: %s", ws_pkt.payload);
+        printf("ws_handler: Got packet with message: %s\n", ws_pkt.payload);
         gw->handleData(req, ws_pkt.payload);
     }
     free(buf);
@@ -187,7 +183,6 @@ static esp_err_t ws_handler(httpd_req_t *req)
 
 static esp_err_t web_handler(httpd_req_t *req)
 {
-    printf("IOT URI: %s\n", req->uri);
     if(strcmp(req->uri, "/dali") == 0)
     {
         httpd_resp_set_type(req, "text/html");
@@ -218,6 +213,12 @@ void DaliGateway::handleData(httpd_req_t *ctx, uint8_t * payload)
     //         {"priority":4,"sendTwice":false,"waitForAnswer":false},
     //     "numberOfBits":16},
     // "type":"daliFrame"}
+    if(doc["type"] == "test")
+    {
+        sendAnswer(0, 0, 0);
+        return;
+    }
+
     if (doc["type"] != "daliFrame")
         return; // we only handle dali frames
 
@@ -280,6 +281,7 @@ void DaliGateway::receivedMonitor(uint8_t line, Dali::Frame frame)
 
 void DaliGateway::sendJson(JsonDocument &doc, bool appendTimeSignature)
 {
+    printf("Sending: %s\n", doc["type"].as<String>());
     if(appendTimeSignature)
     {
         doc["timeSignature"]["timestamp"] = esp_timer_get_time() / 1000000.0;
@@ -310,8 +312,11 @@ void DaliGateway::sendRawWebsocket(const char *data)
     #else
     resp_arg->hd = openknxWebUI.getHandler(); // the httpd handle
     #endif
+
     uint32_t length = strlen(data);
+    resp_arg->len = length;
     char* buffer = (char*)malloc(length+1);
+    memset(buffer, 0, length+1);
     memcpy(buffer, data, length);
     resp_arg->buffer = buffer; // a malloc'ed buffer to transmit
 

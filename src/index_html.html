@@ -342,6 +342,7 @@
 
         socket.onmessage = function(event) {
             try {
+                console.log(event.data);
                 let logEntry = JSON.parse(event.data);
                 if (logEntry.type === "daliMonitor" && logEntry.data) {
                     addLogEntry(logEntry);

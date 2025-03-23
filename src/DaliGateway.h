@@ -12,8 +12,8 @@
 
 struct async_resp_arg {
     httpd_handle_t hd;
-    int fd;
     char *buffer;
+    uint8_t len;
 };
 
 class DaliGateway
@@ -24,6 +24,7 @@ class DaliGateway
     std::vector<Dali::Master *> masters;
     std::vector<uint32_t> sent;
     uint32_t counter;
+    httpd_handle_t hd = NULL;
 
     public:
         void setup();
