@@ -17,13 +17,19 @@ struct async_resp_arg {
     int fd = -1;
 };
 
-class DaliGateway
+struct wait_resp {
+    uint8_t line;
+    uint32_t ref;
+};
+
+class IotGateway
 {
     #ifndef IOT_GW_USE_WEBUI
     httpd_handle_t server = NULL;
     #endif
     std::vector<Dali::Master *> masters;
     std::vector<uint32_t> sent;
+    std::vector<wait_resp*> resp;
     uint32_t counter;
 
     public:
@@ -35,6 +41,8 @@ class DaliGateway
         void handleData(httpd_req_t *ctx, uint8_t * payload);
         
         void generateInfoMessage();
+
+        static void responseTask(void *pvParameters);
 
     private:
         void sendJson(JsonDocument &doc, bool appendTimeSignature = true);

@@ -1,4 +1,4 @@
-#include "DaliGateway.h"
+#include "IotGateway.h"
 
 #include "file_index_html.h"
 #include "file_index_js.h"
@@ -7,7 +7,7 @@
 static esp_err_t ws_handler(httpd_req_t *req);
 static esp_err_t web_handler(httpd_req_t *req);
 
-void DaliGateway::setup()
+void IotGateway::setup()
 {
     httpd_uri_t ws = {
         .uri = "/",
@@ -48,6 +48,39 @@ void DaliGateway::setup()
     };
     openknxWebUI.addService(_web);
     #endif
+
+    xTaskCreate(responseTask, "IotGateway Response", 2096, this, 0, NULL);
+}
+
+void IotGateway::responseTask(void *arg)
+{
+    IotGateway *gw = (IotGateway *)arg;
+    while (true)
+    {
+        if(gw->resp.size() > 0)
+        {
+            wait_resp *wresp = gw->resp.front();
+
+            Dali::Response resp = gw->masters[wresp->line]->getResponse(wresp->ref);
+
+            if(resp.state == Dali::ResponseState::WAITING || resp.state == Dali::ResponseState::SENT)
+            {
+                continue;
+            }
+
+            if(resp.state == Dali::ResponseState::RECEIVED)
+            {
+                gw->sendAnswer(wresp->line, 8, resp.frame.data & 0xFF);
+            }
+            else if(resp.state == Dali::ResponseState::NO_ANSWER)
+            {
+                gw->sendAnswer(wresp->line, 0, 0);
+            }
+
+            gw->resp.erase(gw->resp.begin());
+            delete wresp;
+        }
+    }
 }
 
 static void ws_async_send(void *arg)
@@ -85,7 +118,7 @@ static void ws_async_send(void *arg)
     free(resp_arg);
 }
 
-void DaliGateway::addMaster(Dali::Master *master)
+void IotGateway::addMaster(Dali::Master *master)
 {
     uint8_t index = masters.size();
     printf("Adding master %d\n", index);
@@ -97,7 +130,7 @@ void DaliGateway::addMaster(Dali::Master *master)
 
 static esp_err_t ws_handler(httpd_req_t *req)
 {
-    DaliGateway *gw = (DaliGateway *)req->user_ctx;
+    IotGateway *gw = (IotGateway *)req->user_ctx;
 
     if(req->method == HTTP_GET)
     {
@@ -169,7 +202,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
         printf("ws_handler: httpd_ws_recv_frame failed to get frame len with %d\n", ret);
         return ret;
     }
-    printf("ws_handler: frame len is %d and type is \n", ws_pkt.len, ws_pkt.type);
+    
     if (ws_pkt.len) {
         /* ws_pkt.len + 1 is for NULL termination as we are expecting a string */
         buf = (uint8_t*)calloc(1, ws_pkt.len + 1);
@@ -185,7 +218,6 @@ static esp_err_t ws_handler(httpd_req_t *req)
             free(buf);
             return ret;
         }
-        printf("ws_handler: Got packet with message: %s\n", ws_pkt.payload);
         gw->handleData(req, ws_pkt.payload);
     }
     free(buf);
@@ -220,7 +252,7 @@ static esp_err_t web_handler(httpd_req_t *req)
     return ESP_FAIL;
 }
 
-void DaliGateway::handleData(httpd_req_t *ctx, uint8_t * payload)
+void IotGateway::handleData(httpd_req_t *ctx, uint8_t * payload)
 {
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, payload);
@@ -230,7 +262,7 @@ void DaliGateway::handleData(httpd_req_t *ctx, uint8_t * payload)
         Serial.println(error.c_str());
         return;
     }
-    printf("Received: %s\n", doc["type"].as<String>());
+    // printf("Received: %s\n", doc["type"].as<String>());
 
     uint8_t line = doc["data"]["line"];
 
@@ -255,12 +287,9 @@ void DaliGateway::handleData(httpd_req_t *ctx, uint8_t * payload)
     JsonArray bytes = doc["data"]["daliData"].as<JsonArray>();
     uint8_t index = 0;
     for (JsonVariant value : bytes) {
-        printf("Byte %i: %i\n", index, value.as<uint8_t>());
         frame.data = (frame.data << 8) | value.as<uint8_t>();
-        printf("Data: %.6X\n", frame.data);
         index++;
     }
-    printf("Data: %.6X\n", frame.data);
 
     uint32_t ref = masters[line]->sendRaw(frame);
     sent.push_back(ref);
@@ -269,9 +298,17 @@ void DaliGateway::handleData(httpd_req_t *ctx, uint8_t * payload)
         ref = masters[line]->sendRaw(frame);
         sent.push_back(ref);
     }
+
+    if(doc["data"]["mode"]["waitForAnswer"])
+    {
+        wait_resp *wresp = new wait_resp();
+        wresp->line = line;
+        wresp->ref = ref;
+        resp.push_back(wresp);
+    }
 }
 
-void DaliGateway::receivedMonitor(uint8_t line, Dali::Frame frame)
+void IotGateway::receivedMonitor(uint8_t line, Dali::Frame frame)
 {
     if(frame.flags & DALI_FRAME_ECHO && frame.flags & DALI_FRAME_FORWARD)
     {
@@ -319,9 +356,8 @@ void DaliGateway::receivedMonitor(uint8_t line, Dali::Frame frame)
     sendJson(doc);
 }
 
-void DaliGateway::sendJson(JsonDocument &doc, bool appendTimeSignature)
+void IotGateway::sendJson(JsonDocument &doc, bool appendTimeSignature)
 {
-    printf("Sending: %s\n", doc["type"].as<String>());
     if(appendTimeSignature)
     {
         doc["timeSignature"]["timestamp"] = esp_timer_get_time() / 1000000.0;
@@ -329,8 +365,6 @@ void DaliGateway::sendJson(JsonDocument &doc, bool appendTimeSignature)
     }
     String jsonString;
     serializeJson(doc, jsonString);
-    printf("Sending: %s\n", jsonString.c_str());
-    printf("Sending %i chars\n", jsonString.length());
     sendRawWebsocket(jsonString.c_str());
 }
 
@@ -348,7 +382,7 @@ void DaliGateway::sendJson(JsonDocument &doc, bool appendTimeSignature)
 63 Der Befehl wurde aufgrund einer Zeitüberschreitung nicht gesendet.
 100 Das DALI Interface hat keine Antwort zurückgegeben
 */
-void DaliGateway::sendResponse(uint8_t line, uint8_t status)
+void IotGateway::sendResponse(uint8_t line, uint8_t status)
 {
     JsonDocument doc;
     doc["type"] = "daliFrame";
@@ -363,7 +397,7 @@ void DaliGateway::sendResponse(uint8_t line, uint8_t status)
 8 antwort
 63 framing error
 */
-void DaliGateway::sendAnswer(uint8_t line, uint8_t status, uint8_t answer)
+void IotGateway::sendAnswer(uint8_t line, uint8_t status, uint8_t answer)
 {
     JsonDocument doc;
     doc["type"] = "daliAnswer";
@@ -374,7 +408,7 @@ void DaliGateway::sendAnswer(uint8_t line, uint8_t status, uint8_t answer)
     sendJson(doc, false);
 }
 
-void DaliGateway::sendRawWebsocket(const char *data)
+void IotGateway::sendRawWebsocket(const char *data)
 {
     struct async_resp_arg *resp_arg = (struct async_resp_arg *)malloc(sizeof(struct async_resp_arg));
 
@@ -385,7 +419,6 @@ void DaliGateway::sendRawWebsocket(const char *data)
     #endif
 
     uint32_t length = strlen(data);
-    printf("Sending %i bytes\n", length);
     resp_arg->len = length;
     char* buffer = (char*)malloc(length+1);
     memset(buffer, 0, length+1);
@@ -397,7 +430,7 @@ void DaliGateway::sendRawWebsocket(const char *data)
     httpd_queue_work(resp_arg->hd, ws_async_send, resp_arg);
 }
 
-void DaliGateway::generateInfoMessage()
+void IotGateway::generateInfoMessage()
 {
     JsonDocument doc;
     doc["type"] = "info";
