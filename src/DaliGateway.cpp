@@ -35,13 +35,15 @@ void DaliGateway::setup()
     }
     #else
     WebService _ws = {
-        .uri = ws,
+        .httpd = ws,
+        .uri = "/",
         .name = "Dali Websocket",
         .isVisible = false
     };
     openknxWebUI.addService(_ws);
     WebService _web = {
-        .uri = web,
+        .httpd = web,
+        .uri = "/dali",
         .name = "Dali Monitor"
     };
     openknxWebUI.addService(_web);
@@ -319,13 +321,14 @@ void DaliGateway::sendJson(JsonDocument &doc, bool appendTimeSignature)
     if(appendTimeSignature)
     {
         doc["timeSignature"]["timestamp"] = esp_timer_get_time() / 1000000.0;
-        doc["timeSignature"]["counter"] = 0; //counter++;
+        doc["timeSignature"]["counter"] = counter++;
     }
     String jsonString;
     serializeJson(doc, jsonString);
+    printf("Sending: %s\n", jsonString.c_str());
+    printf("Sending %i chars\n", jsonString.length());
     sendRawWebsocket(jsonString.c_str());
 }
-
 
 /*
 0 Der Befehl wurde an den DALI Bus gesendet.
@@ -378,6 +381,7 @@ void DaliGateway::sendRawWebsocket(const char *data)
     #endif
 
     uint32_t length = strlen(data);
+    printf("Sending %i bytes\n", length);
     resp_arg->len = length;
     char* buffer = (char*)malloc(length+1);
     memset(buffer, 0, length+1);

@@ -13,7 +13,7 @@
 struct async_resp_arg {
     httpd_handle_t hd;
     char *buffer;
-    uint8_t len;
+    uint16_t len;
     int fd = -1;
 };
 
