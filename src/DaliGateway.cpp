@@ -17,7 +17,7 @@ void DaliGateway::setup()
         .is_websocket = true
     };
     httpd_uri_t web = {
-        .uri = "/dali",
+        .uri = "/dali*",
         .method = HTTP_GET,
         .handler = web_handler,
         .user_ctx = this
