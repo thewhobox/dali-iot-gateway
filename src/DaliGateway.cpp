@@ -1,6 +1,8 @@
 #include "DaliGateway.h"
 
-#include "index.h"
+#include "file_index_html.h"
+#include "file_index_js.h"
+#include "file_index_css.h"
 
 static esp_err_t ws_handler(httpd_req_t *req);
 static esp_err_t web_handler(httpd_req_t *req);
@@ -56,22 +58,28 @@ static void ws_async_send(void *arg)
     ws_pkt.len = resp_arg->len;
     ws_pkt.type = HTTPD_WS_TYPE_TEXT;
 
-    static size_t max_clients = CONFIG_LWIP_MAX_LISTENING_TCP;
-    size_t fds = max_clients;
-    int client_fds[max_clients];
-    
-    esp_err_t ret = httpd_get_client_list(resp_arg->hd, &fds, client_fds);
+    if(resp_arg->fd == -1)
+    {
+        static size_t max_clients = CONFIG_LWIP_MAX_LISTENING_TCP;
+        size_t fds = max_clients;
+        int client_fds[max_clients];
 
-    if (ret != ESP_OK) {
-        return;
-    }
+        esp_err_t ret = httpd_get_client_list(resp_arg->hd, &fds, client_fds);
 
-    for (int i = 0; i < fds; i++) {
-        int client_info = httpd_ws_get_fd_info(resp_arg->hd, client_fds[i]);
-        if (client_info == HTTPD_WS_CLIENT_WEBSOCKET) {
-            httpd_ws_send_frame_async(resp_arg->hd, client_fds[i], &ws_pkt);
+        if (ret != ESP_OK) {
+            return;
         }
+
+        for (int i = 0; i < fds; i++) {
+            int client_info = httpd_ws_get_fd_info(resp_arg->hd, client_fds[i]);
+            if (client_info == HTTPD_WS_CLIENT_WEBSOCKET) {
+                httpd_ws_send_frame_async(resp_arg->hd, client_fds[i], &ws_pkt);
+            }
+        }
+    } else {
+        httpd_ws_send_frame_async(resp_arg->hd, resp_arg->fd, &ws_pkt);
     }
+
     free(resp_arg);
 }
 
@@ -144,6 +152,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
         printf("Got new Websocket from %s\n", host);
         free(host);
         free(upgrade);
+        fd = httpd_req_to_sockfd(req);
         gw->generateInfoMessage();
         return ESP_OK;
     }
@@ -186,7 +195,22 @@ static esp_err_t web_handler(httpd_req_t *req)
     if(strcmp(req->uri, "/dali") == 0)
     {
         httpd_resp_set_type(req, "text/html");
-        httpd_resp_send(req, index_html, HTTPD_RESP_USE_STRLEN);
+        httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+        httpd_resp_send(req, file_index_html, index_html_len);
+        return ESP_OK;
+    }
+    else if(strcmp(req->uri, "/dali.css"))
+    {
+        httpd_resp_set_type(req, "text/css");
+        httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+        httpd_resp_send(req, file_index_css, index_css_len);
+        return ESP_OK;
+    }
+    else if(strcmp(req->uri, "/dali.js"))
+    {
+        httpd_resp_set_type(req, "application/javascript");
+        httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+        httpd_resp_send(req, file_index_js, index_js_len);
         return ESP_OK;
     }
 
@@ -213,17 +237,12 @@ void DaliGateway::handleData(httpd_req_t *ctx, uint8_t * payload)
     //         {"priority":4,"sendTwice":false,"waitForAnswer":false},
     //     "numberOfBits":16},
     // "type":"daliFrame"}
-    if(doc["type"] == "test")
-    {
-        sendAnswer(0, 0, 0);
-        return;
-    }
 
     if (doc["type"] != "daliFrame")
         return; // we only handle dali frames
 
-    if(doc["data"]["line"] >= masters.size()) {
-        sendAnswer(doc["data"]["line"], 5, 0);
+    if(line >= masters.size()) {
+        sendAnswer(line, 5, 0);
         return;
     }
 
@@ -233,6 +252,11 @@ void DaliGateway::handleData(httpd_req_t *ctx, uint8_t * payload)
 
     uint32_t ref = masters[line]->sendRaw(frame);
     sent.push_back(ref);
+    if(doc["data"]["mode"]["sendTwice"])
+    {
+        uint32_t ref = masters[line]->sendRaw(frame);
+        sent.push_back(ref);
+    }
 }
 
 void DaliGateway::receivedMonitor(uint8_t line, Dali::Frame frame)
@@ -243,10 +267,7 @@ void DaliGateway::receivedMonitor(uint8_t line, Dali::Frame frame)
         {
             if(r == frame.ref)
             {
-                JsonDocument sent;
-                sent["type"] = "daliFrame";
-                sent["data"]["line"] = line;
-                sent["data"]["result"] = 0;
+                sendResponse(line, 0);
                 sent.remove(r);
                 break;
             }
@@ -292,6 +313,36 @@ void DaliGateway::sendJson(JsonDocument &doc, bool appendTimeSignature)
     sendRawWebsocket(jsonString.c_str());
 }
 
+
+/*
+0 Der Befehl wurde an den DALI Bus gesendet.
+1 Der Befehl wurde aufgrund der Spannungsversorgung des DALI Bus nicht gesendet.
+2 Der Befehl wurde aufgrund des DALI Initialize Modus nicht gesendet.
+3 Der Befehl wurde aufgrund des DALI Quiescent Modus nicht gesendet.
+4 Der Sendepuffer des DALI Interface ist voll.
+5 Das DALI Interface unterstützt die angeforderte Linie nicht.
+6 Der Befehl enthält einen Syntax-Fehler.
+7 Der Befehl wurde aufgrund eines aktiven Makros nicht gesendet.
+61 Der Befehl wurde aufgrund einer Kollision am DALI Bus nicht gesendet.
+62 Der Befehl wurde aufgrund eines DALI Bus Fehlers nicht gesendet.
+63 Der Befehl wurde aufgrund einer Zeitüberschreitung nicht gesendet.
+100 Das DALI Interface hat keine Antwort zurückgegeben
+*/
+void DaliGateway::sendResponse(uint8_t line, uint8_t result)
+{
+    JsonDocument doc;
+    doc["type"] = "daliFrame";
+    doc["data"]["line"] = line;
+    doc["data"]["result"] = status;
+
+    sendJson(doc, false);
+}
+
+/*
+0 keine Antwort
+8 antwort
+63 framing error
+*/
 void DaliGateway::sendAnswer(uint8_t line, uint8_t status, uint8_t answer)
 {
     JsonDocument doc;
@@ -319,6 +370,8 @@ void DaliGateway::sendRawWebsocket(const char *data)
     memset(buffer, 0, length+1);
     memcpy(buffer, data, length);
     resp_arg->buffer = buffer; // a malloc'ed buffer to transmit
+    resp_arg->fd = fd;
+    fd = -1;
 
     httpd_queue_work(resp_arg->hd, ws_async_send, resp_arg);
 }

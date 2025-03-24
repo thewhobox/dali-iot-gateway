@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dali Bus Monitor</title>
+    <link rel="stylesheet" href="/dali.css">
+</head>
+<body>
+    <header>
+        <img src="https://raw.githubusercontent.com/OpenKNX/.github/main/profile/images/weiss.svg" alt="Logo" class="logo">
+        <h1>Dali Bus Monitor</h1>
+    </header>
+    <div class="status" id="status">Verbindung wird hergestellt...</div>
+    <input type="text" id="search" placeholder="Suchen..." onkeyup="filterLogs()">
+    <button id="clearButton" onclick="clearLogs()">Clear Logs</button>
+    <table id="logTable">
+        <thead>
+            <tr>
+                <th>Source</th>
+                <th>Line</th>
+                <th>Hex Data</th>
+                <th>Address</th>
+                <th style="width: auto !important">Command</th>
+                <th>Time</th>
+                <th>Date</th>
+                <th>Delta (MS)</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+    <!-- // TODO this is hardcoded. Myaybe add a way to replace WEBUI_BASE_URI -->
+    <script src="/dali.js"></script>
+</body>
+</html>
