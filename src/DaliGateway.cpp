@@ -252,17 +252,12 @@ void DaliGateway::handleData(httpd_req_t *ctx, uint8_t * payload)
     frame.size = doc["data"]["numberOfBits"];
     frame.flags = DALI_FRAME_FORWARD;
 
-    uint8_t iterations = 8;
-    if(frame.size == 16)
-        iterations = 2;
-    else if(frame.size == 24)
-        iterations = 3;
-
     JsonArray bytes = doc["data"]["daliData"].as<JsonArray>();
     uint8_t index = 0;
     for (JsonVariant value : bytes) {
         printf("Byte %i: %i\n", index, value.as<uint8_t>());
-        frame.data = (value.as<uint8_t>() << (8*index)) | frame.data;
+        frame.data = (frame.data << 8) | value.as<uint8_t>();
+        printf("Data: %.6X\n", frame.data);
         index++;
     }
     printf("Data: %.6X\n", frame.data);
