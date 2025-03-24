@@ -25,9 +25,10 @@ class DaliGateway
     std::vector<Dali::Master *> masters;
     std::vector<uint32_t> sent;
     uint32_t counter;
-    int fd = -1;
 
     public:
+        int fd = -1;
+
         void setup();
         void addMaster(Dali::Master *master);
         void receivedMonitor(uint8_t line, Dali::Frame frame);
@@ -37,6 +38,7 @@ class DaliGateway
 
     private:
         void sendJson(JsonDocument &doc, bool appendTimeSignature = true);
-        void sendAnswer(uint8_t num, uint8_t status, uint8_t answer);
+        void sendResponse(uint8_t line, uint8_t status);
+        void sendAnswer(uint8_t line, uint8_t status, uint8_t answer);
         void sendRawWebsocket(const char *data);
 };

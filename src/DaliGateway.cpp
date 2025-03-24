@@ -152,7 +152,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
         printf("Got new Websocket from %s\n", host);
         free(host);
         free(upgrade);
-        fd = httpd_req_to_sockfd(req);
+        gw->fd = httpd_req_to_sockfd(req);
         gw->generateInfoMessage();
         return ESP_OK;
     }
@@ -196,21 +196,21 @@ static esp_err_t web_handler(httpd_req_t *req)
     {
         httpd_resp_set_type(req, "text/html");
         httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
-        httpd_resp_send(req, file_index_html, index_html_len);
+        httpd_resp_send(req, file_index_html, file_index_html_len);
         return ESP_OK;
     }
     else if(strcmp(req->uri, "/dali.css"))
     {
         httpd_resp_set_type(req, "text/css");
         httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
-        httpd_resp_send(req, file_index_css, index_css_len);
+        httpd_resp_send(req, file_index_css, file_index_css_len);
         return ESP_OK;
     }
     else if(strcmp(req->uri, "/dali.js"))
     {
         httpd_resp_set_type(req, "application/javascript");
         httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
-        httpd_resp_send(req, file_index_js, index_js_len);
+        httpd_resp_send(req, file_index_js, file_index_js_len);
         return ESP_OK;
     }
 
@@ -250,6 +250,12 @@ void DaliGateway::handleData(httpd_req_t *ctx, uint8_t * payload)
     frame.size = doc["data"]["numberOfBits"];
     frame.flags = DALI_FRAME_FORWARD;
 
+    JsonArray bytes = doc["data"]["daliData"].as<JsonArray>();
+    uint8_t index = 0;
+    for (JsonVariant value : bytes) {
+        frame.data = (frame.data << (8 * index)) | value.as<uint8_t>();
+    }
+
     uint32_t ref = masters[line]->sendRaw(frame);
     sent.push_back(ref);
     if(doc["data"]["mode"]["sendTwice"])
@@ -268,7 +274,14 @@ void DaliGateway::receivedMonitor(uint8_t line, Dali::Frame frame)
             if(r == frame.ref)
             {
                 sendResponse(line, 0);
-                sent.remove(r);
+                for(int i = 0; i < sent.size(); i++)
+                {
+                    if(sent[i] == frame.ref)
+                    {
+                        sent.erase(sent.begin() + i);
+                        break;
+                    }
+                }
                 break;
             }
         }
@@ -328,7 +341,7 @@ void DaliGateway::sendJson(JsonDocument &doc, bool appendTimeSignature)
 63 Der Befehl wurde aufgrund einer Zeitüberschreitung nicht gesendet.
 100 Das DALI Interface hat keine Antwort zurückgegeben
 */
-void DaliGateway::sendResponse(uint8_t line, uint8_t result)
+void DaliGateway::sendResponse(uint8_t line, uint8_t status)
 {
     JsonDocument doc;
     doc["type"] = "daliFrame";
