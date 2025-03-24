@@ -199,14 +199,14 @@ static esp_err_t web_handler(httpd_req_t *req)
         httpd_resp_send(req, file_index_html, file_index_html_len);
         return ESP_OK;
     }
-    else if(strcmp(req->uri, "/dali.css"))
+    else if(strcmp(req->uri, "/dali.css") == 0)
     {
         httpd_resp_set_type(req, "text/css");
         httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
         httpd_resp_send(req, file_index_css, file_index_css_len);
         return ESP_OK;
     }
-    else if(strcmp(req->uri, "/dali.js"))
+    else if(strcmp(req->uri, "/dali.js") == 0)
     {
         httpd_resp_set_type(req, "application/javascript");
         httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
