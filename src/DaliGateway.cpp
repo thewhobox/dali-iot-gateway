@@ -242,7 +242,7 @@ void DaliGateway::handleData(httpd_req_t *ctx, uint8_t * payload)
         return; // we only handle dali frames
 
     if(line >= masters.size()) {
-        sendAnswer(line, 5, 0);
+        sendResponse(line, 5);
         return;
     }
 
@@ -260,7 +260,7 @@ void DaliGateway::handleData(httpd_req_t *ctx, uint8_t * payload)
     sent.push_back(ref);
     if(doc["data"]["mode"]["sendTwice"])
     {
-        uint32_t ref = masters[line]->sendRaw(frame);
+        ref = masters[line]->sendRaw(frame);
         sent.push_back(ref);
     }
 }
