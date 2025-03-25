@@ -34,19 +34,26 @@ void IotGateway::setup()
         printf("Failed to start the server\n");
     }
     #else
-    WebService _ws = {
+    WebHandler _ws = {
         .httpd = ws,
         .uri = "/",
         .name = "Dali Websocket",
         .isVisible = false
     };
-    openknxWebUI.addService(_ws);
-    WebService _web = {
+    openknxWebUI.addHandler(_ws);
+    WebHandler _web = {
         .httpd = web,
         .uri = "/dali",
         .name = "Dali Monitor"
     };
-    openknxWebUI.addService(_web);
+    openknxWebUI.addHandler(_web);
+    WebPage _page = {
+        .uri = "/dali",
+        .name = "Dali Monitor 2",
+        .handler = page_handler,
+        .arg = this
+    };
+    openknxWebUI.addPage(_page);
     #endif
 
     xTaskCreate(responseTask, "IotGateway Response", 2096, this, 0, NULL);
@@ -126,6 +133,22 @@ void IotGateway::addMaster(Dali::Master *master)
     master->registerMonitor([this, index](Dali::Frame frame) {
         this->receivedMonitor(index, frame);
     });
+}
+
+static esp_err_t page_handler(const char *uri, httpd_req_t *r, void *arg)
+{
+    printf("Page handler\n");
+    printf("URI: %s\n", uri);
+    printf("URI: %s\n", r->uri);
+    IotGateway *gw = (IotGateway *)arg;
+
+    if(strcmp(uri, "/dali") == 0)
+    {
+        httpd_resp_send(req, "OK", 2);
+        return ESP_OK;
+    }
+
+    return ESP_NOT_FOUND;
 }
 
 static esp_err_t ws_handler(httpd_req_t *req)
