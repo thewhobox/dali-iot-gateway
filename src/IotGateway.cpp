@@ -4,8 +4,11 @@
 #include "file_index_js.h"
 #include "file_index_css.h"
 
-static esp_err_t ws_handler(httpd_req_t *req);
+#ifndef IOT_GW_USE_WEBUI
 static esp_err_t web_handler(httpd_req_t *req);
+#endif
+static esp_err_t ws_handler(httpd_req_t *req);
+static esp_err_t page_handler(const char *uri, httpd_req_t *req, void *arg);
 
 void IotGateway::setup()
 {
@@ -16,14 +19,14 @@ void IotGateway::setup()
         .user_ctx = this,
         .is_websocket = true
     };
+
+    #ifndef IOT_GW_USE_WEBUI
     httpd_uri_t web = {
         .uri = "/dali*",
         .method = HTTP_GET,
         .handler = web_handler,
         .user_ctx = this
     };
-
-    #ifndef IOT_GW_USE_WEBUI
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
 
     if (httpd_start(&server, &config) == ESP_OK) {
@@ -41,17 +44,17 @@ void IotGateway::setup()
         .isVisible = false
     };
     openknxWebUI.addHandler(_ws);
-    WebHandler _web = {
-        .httpd = web,
-        .uri = "/dali",
-        .name = "Dali Monitor"
-    };
-    openknxWebUI.addHandler(_web);
+    // WebHandler _web = {
+    //     .httpd = web,
+    //     .uri = "/dali",
+    //     .name = "Dali Monitor"
+    // };
+    // openknxWebUI.addHandler(_web);
     WebPage _page = {
         .uri = "/dali",
-        .name = "Dali Monitor 2",
+        .name = "Dali Monitor",
         .handler = page_handler,
-        .arg = this
+        .arg = (void*)this
     };
     openknxWebUI.addPage(_page);
     #endif
@@ -135,21 +138,50 @@ void IotGateway::addMaster(Dali::Master *master)
     });
 }
 
-static esp_err_t page_handler(const char *uri, httpd_req_t *r, void *arg)
+static esp_err_t page_handler(const char *uri, httpd_req_t *req, void *arg)
 {
-    printf("Page handler\n");
-    printf("URI: %s\n", uri);
-    printf("URI: %s\n", r->uri);
     IotGateway *gw = (IotGateway *)arg;
+    printf("Page handler: %s\n", uri);
+    printf("Req uri: %s\n", req->uri);
 
     if(strcmp(uri, "/dali") == 0)
     {
-        httpd_resp_send(req, "OK", 2);
+        httpd_resp_set_type(req, "text/html");
+        httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+        httpd_resp_send(req, file_index_html, file_index_html_len);
+        return ESP_OK;
+    }
+    else if(strcmp(uri, "/dali.css") == 0)
+    {
+        httpd_resp_set_type(req, "text/css");
+        httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+        httpd_resp_send(req, file_index_css, file_index_css_len);
+        return ESP_OK;
+    }
+    else if(strcmp(uri, "/dali.js") == 0)
+    {
+        httpd_resp_set_type(req, "application/javascript");
+        httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+        httpd_resp_send(req, file_index_js, file_index_js_len);
         return ESP_OK;
     }
 
-    return ESP_NOT_FOUND;
+    // if(strcmp(uri, "/dali") == 0)
+    // {
+    //     httpd_resp_send(req, "OK", 2);
+    //     return ESP_OK;
+    // }
+
+    httpd_resp_send_404(req);
+    return ESP_ERR_NOT_FOUND;
 }
+
+#ifndef IOT_GW_USE_WEBUI
+static esp_err_t web_handler(httpd_req_t *req)
+{
+    return page(req->uri, req, (void*)req->user_ctx);
+}
+#endif
 
 static esp_err_t ws_handler(httpd_req_t *req)
 {
@@ -245,34 +277,6 @@ static esp_err_t ws_handler(httpd_req_t *req)
     }
     free(buf);
     return ret;
-}
-
-static esp_err_t web_handler(httpd_req_t *req)
-{
-    if(strcmp(req->uri, "/dali") == 0)
-    {
-        httpd_resp_set_type(req, "text/html");
-        httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
-        httpd_resp_send(req, file_index_html, file_index_html_len);
-        return ESP_OK;
-    }
-    else if(strcmp(req->uri, "/dali.css") == 0)
-    {
-        httpd_resp_set_type(req, "text/css");
-        httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
-        httpd_resp_send(req, file_index_css, file_index_css_len);
-        return ESP_OK;
-    }
-    else if(strcmp(req->uri, "/dali.js") == 0)
-    {
-        httpd_resp_set_type(req, "application/javascript");
-        httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
-        httpd_resp_send(req, file_index_js, file_index_js_len);
-        return ESP_OK;
-    }
-
-    httpd_resp_send_404(req);
-    return ESP_FAIL;
 }
 
 void IotGateway::handleData(httpd_req_t *ctx, uint8_t * payload)
