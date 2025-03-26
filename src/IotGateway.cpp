@@ -135,8 +135,6 @@ void IotGateway::addMaster(Dali::Master *master)
 static esp_err_t page_handler(const char *uri, httpd_req_t *req, void *arg)
 {
     IotGateway *gw = (IotGateway *)arg;
-    printf("Page handler: %s\n", uri);
-    printf("Req uri: %s\n", req->uri);
 
     if(strcmp(uri, "/dali") == 0)
     {
