@@ -1,9 +1,9 @@
 #pragma once
 
 #ifndef IOT_GW_USE_WEBUI
-#include "WebsocketsServer.h"
+#include <esp_http_server.h>
 #else
-#include "WebUI.h"
+#include "NetworkModule.h"
 #endif
 
 #include "dali/Master.h"

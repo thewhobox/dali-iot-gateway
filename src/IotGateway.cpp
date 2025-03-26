@@ -37,26 +37,20 @@ void IotGateway::setup()
         printf("Failed to start the server\n");
     }
     #else
-    WebHandler _ws = {
+    WebserverHandler _ws = {
         .httpd = ws,
         .uri = "/",
         .name = "Dali Websocket",
         .isVisible = false
     };
-    openknxWebUI.addHandler(_ws);
-    // WebHandler _web = {
-    //     .httpd = web,
-    //     .uri = "/dali",
-    //     .name = "Dali Monitor"
-    // };
-    // openknxWebUI.addHandler(_web);
-    WebPage _page = {
+    openknxNetwork.addWebserverHandler(_ws);
+    WebserverPage _page = {
         .uri = "/dali",
         .name = "Dali Monitor",
         .handler = page_handler,
         .arg = (void*)this
     };
-    openknxWebUI.addPage(_page);
+    openknxNetwork.addWebserverPage(_page);
     #endif
 
     xTaskCreate(responseTask, "IotGateway Response", 2096, this, 0, NULL);
@@ -228,7 +222,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
             #ifndef IOT_GW_USE_WEBUI
             asprintf(&redirect_url, "http://%s/dali", host);
             #else
-            asprintf(&redirect_url, "http://%s%s", host, openknxWebUI.getBaseUri());
+            asprintf(&redirect_url, "http://%s%s", host, openknxNetwork.getWebserverBaseUri());
             #endif
             httpd_resp_set_hdr(req, "Location", redirect_url);
             httpd_resp_send(req, NULL, 0);
@@ -442,7 +436,7 @@ void IotGateway::sendRawWebsocket(const char *data)
     #ifndef IOT_GW_USE_WEBUI
     resp_arg->hd = &server; // the httpd handle
     #else
-    resp_arg->hd = openknxWebUI.getHandler(); // the httpd handle
+    resp_arg->hd = openknxNetwork.getWebserverHandler(); // the httpd handle
     #endif
 
     uint32_t length = strlen(data);
