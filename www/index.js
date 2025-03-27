@@ -329,7 +329,7 @@ function parse8bit(frame)
         isEcho: frame.data.isEcho,
         line: frame.data.line,
         address: "",
-        commandDescription: "Answer",
+        commandDescription: "Answer (" + (frame.data.data & 0xFF).toString(16).padStart(2, '0').toUpperCase() + ")",
         timestamp: frame.data.timestamp,
         error: frame.data.framingError ? frame.data.framingError : false
     }
