@@ -49,4 +49,5 @@ class IotGateway
         void sendResponse(uint8_t line, uint8_t status);
         void sendAnswer(uint8_t line, uint8_t status, uint8_t answer);
         void sendRawWebsocket(const char *data);
+        int pageHandler(const char *uri, WebRequest *req, void *arg);
 };
