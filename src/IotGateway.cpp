@@ -38,13 +38,16 @@ void IotGateway::setup()
     }
     #else
     openknxNetwork.webserver.addHandler(ws);
-    WebserverPage _page = {
-        .uri = "/dali",
-        .name = "Dali Monitor",
-        .handler = [this](const char *uri, WebRequest *req, void *arg) { return this->pageHandler(uri, req, arg); },
-        .arg = (void*)this
-    };
-    openknxNetwork.webserver.addPage(_page);
+    // WebserverPage _page = {
+    //     .uri = "/dali",
+    //     .name = "Dali Monitor",
+    //     .handler = [this](const char *uri, WebRequest *req, void *arg) { return this->pageHandler(uri, req, arg); },
+    //     .arg = (void*)this
+    // };
+    // openknxNetwork.webserver.addPage(_page);
+    openknxNetwork.webserver.addStaticFile("/dali", "text/html", file_index_html, file_index_html_len);
+    openknxNetwork.webserver.addStaticFile("/dali.css", "text/css", file_index_css, file_index_css_len);
+    openknxNetwork.webserver.addStaticFile("/dali.js", "application/javascript", file_index_js, file_index_js_len);
     #endif
 
     xTaskCreate(responseTask, "IotGateway Response", 2096, this, 0, NULL);
@@ -126,71 +129,61 @@ void IotGateway::addMaster(Dali::Master *master)
     });
 }
 
-int IotGateway::pageHandler(const char *uri, WebRequest *req, void *arg)
-{
-    if(strcmp(uri, "/dali") == 0)
-    {
-        req->setResponse("text/html", file_index_html, file_index_html_len);
-        req->addResponseHeader("Content-Encoding", "gzip");
-        return 0;
-    }
-    else if(strcmp(uri, "/dali.css") == 0)
-    {
-        req->setResponse("text/css", file_index_css, file_index_css_len);
-        req->addResponseHeader("Content-Encoding", "gzip");
-        return 0;
-    }
-    else if(strcmp(uri, "/dali.js") == 0)
-    {
-        req->setResponse("application/javascript", file_index_js, file_index_js_len);
-        req->addResponseHeader("Content-Encoding", "gzip");
-        return 0;
-    }
-
-    req->setStatusCode(404);
-    return -1;
-}
-
-// static esp_err_t page_handler(const char *uri, httpd_req_t *req, void *arg)
+// int IotGateway::pageHandler(const char *uri, WebRequest *req, void *arg)
 // {
-//     IotGateway *gw = (IotGateway *)arg;
-
 //     if(strcmp(uri, "/dali") == 0)
 //     {
-//         httpd_resp_set_type(req, "text/html");
-//         httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
-//         httpd_resp_send(req, file_index_html, file_index_html_len);
-//         return ESP_OK;
+//         req->setResponse("text/html", file_index_html, file_index_html_len);
+//         req->addResponseHeader("Content-Encoding", "gzip");
+//         return 0;
 //     }
 //     else if(strcmp(uri, "/dali.css") == 0)
 //     {
-//         httpd_resp_set_type(req, "text/css");
-//         httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
-//         httpd_resp_send(req, file_index_css, file_index_css_len);
-//         return ESP_OK;
+//         req->setResponse("text/css", file_index_css, file_index_css_len);
+//         req->addResponseHeader("Content-Encoding", "gzip");
+//         return 0;
 //     }
 //     else if(strcmp(uri, "/dali.js") == 0)
 //     {
-//         httpd_resp_set_type(req, "application/javascript");
-//         httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
-//         httpd_resp_send(req, file_index_js, file_index_js_len);
-//         return ESP_OK;
+//         req->setResponse("application/javascript", file_index_js, file_index_js_len);
+//         req->addResponseHeader("Content-Encoding", "gzip");
+//         return 0;
 //     }
 
-//     // if(strcmp(uri, "/dali") == 0)
-//     // {
-//     //     httpd_resp_send(req, "OK", 2);
-//     //     return ESP_OK;
-//     // }
-
-//     httpd_resp_send_404(req);
-//     return ESP_ERR_NOT_FOUND;
+//     req->setStatusCode(404);
+//     return -1;
 // }
 
 #ifndef IOT_GW_USE_WEBUI
 static esp_err_t web_handler(httpd_req_t *req)
 {
-    return page(req->uri, req, (void*)req->user_ctx);
+    if(strcmp(uri, "/dali") == 0)
+    {
+        httpd_resp_set_type(req, "text/html");
+        httpd_resp_set_status(req, "200 OK");
+        httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+        httpd_resp_send(req, file_index_html, file_index_html_len);
+        return ESP_OK;
+    }
+    else if(strcmp(uri, "/dali.css") == 0)
+    {
+        httpd_resp_set_type(req, "text/css");
+        httpd_resp_set_status(req, "200 OK");
+        httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+        httpd_resp_send(req, file_index_css, file_index_css_len);
+        return ESP_OK;
+    }
+    else if(strcmp(uri, "/dali.js") == 0)
+    {
+        httpd_resp_set_type(req, "application/javascript");
+        httpd_resp_set_status(req, "200 OK");
+        httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+        httpd_resp_send(req, file_index_js, file_index_js_len);
+        return 0;
+    }
+
+    httpd_resp_send_404(req);
+    return ESP_FAIL;
 }
 #endif
 
