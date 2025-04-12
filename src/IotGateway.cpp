@@ -38,14 +38,14 @@ void IotGateway::setup()
     }
     #else
     openknxNetwork.webserver.addHandler(ws);
-    // WebserverPage _page = {
-    //     .uri = "/dali",
-    //     .name = "Dali Monitor",
-    //     .handler = [this](const char *uri, WebRequest *req, void *arg) { return this->pageHandler(uri, req, arg); },
-    //     .arg = (void*)this
-    // };
-    // openknxNetwork.webserver.addPage(_page);
-    openknxNetwork.webserver.addStaticFile("/dali", "text/html", file_index_html, file_index_html_len);
+    WebserverPage _page = {
+        .uri = "/dali",
+        .name = "Dali Monitor",
+        .handler = [this](const char *uri, WebRequest *req, void *arg) { return this->pageHandler(uri, req, arg); },
+        .arg = (void*)this
+    };
+    openknxNetwork.webserver.addPage(_page);
+    // openknxNetwork.webserver.addStaticFile("/dali", "text/html", file_index_html, file_index_html_len);
     openknxNetwork.webserver.addStaticFile("/dali.css", "text/css", file_index_css, file_index_css_len);
     openknxNetwork.webserver.addStaticFile("/dali.js", "application/javascript", file_index_js, file_index_js_len);
     #endif
@@ -129,14 +129,14 @@ void IotGateway::addMaster(Dali::Master *master)
     });
 }
 
-// int IotGateway::pageHandler(const char *uri, WebRequest *req, void *arg)
-// {
-//     if(strcmp(uri, "/dali") == 0)
-//     {
-//         req->setResponse("text/html", file_index_html, file_index_html_len);
-//         req->addResponseHeader("Content-Encoding", "gzip");
-//         return 0;
-//     }
+int IotGateway::pageHandler(const char *uri, WebRequest *req, void *arg)
+{
+    if(strcmp(uri, "/dali") == 0)
+    {
+        req->setResponse("text/html", file_index_html, file_index_html_len);
+        req->addResponseHeader("Content-Encoding", "gzip");
+        return 0;
+    }
 //     else if(strcmp(uri, "/dali.css") == 0)
 //     {
 //         req->setResponse("text/css", file_index_css, file_index_css_len);
@@ -150,9 +150,9 @@ void IotGateway::addMaster(Dali::Master *master)
 //         return 0;
 //     }
 
-//     req->setStatusCode(404);
-//     return -1;
-// }
+    req->setStatusCode(404);
+    return -1;
+}
 
 #ifndef IOT_GW_USE_WEBUI
 static esp_err_t web_handler(httpd_req_t *req)
