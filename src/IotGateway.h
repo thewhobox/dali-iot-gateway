@@ -49,5 +49,7 @@ class IotGateway
         void sendResponse(uint8_t line, uint8_t status);
         void sendAnswer(uint8_t line, uint8_t status, uint8_t answer);
         void sendRawWebsocket(const char *data);
+        #ifdef IOT_GW_USE_WEBUI
         int pageHandler(const char *uri, WebRequest *req, void *arg);
+        #endif
 };

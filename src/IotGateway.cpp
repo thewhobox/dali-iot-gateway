@@ -129,6 +129,7 @@ void IotGateway::addMaster(Dali::Master *master)
     });
 }
 
+#ifdef IOT_GW_USE_WEBUI
 int IotGateway::pageHandler(const char *uri, WebRequest *req, void *arg)
 {
     if(strcmp(uri, "/dali") == 0)
@@ -153,6 +154,7 @@ int IotGateway::pageHandler(const char *uri, WebRequest *req, void *arg)
     req->setStatusCode(404);
     return -1;
 }
+#endif
 
 #ifndef IOT_GW_USE_WEBUI
 static esp_err_t web_handler(httpd_req_t *req)
