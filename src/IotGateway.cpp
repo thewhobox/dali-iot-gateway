@@ -468,7 +468,7 @@ void IotGateway::generateInfoMessage()
     JsonDocument doc;
     doc["type"] = "info";
     doc["data"]["name"] = "dali-iot";
-    doc["data"]["version"] = "v1.2.0/1.0.9";
+    doc["data"]["version"] = "v1.2.0/1.0.0";
     doc["data"]["tier"] = "plus";
     doc["data"]["emergencyLight"] = false;
     doc["data"]["errors"] = JsonObject();
@@ -477,11 +477,11 @@ void IotGateway::generateInfoMessage()
     doc["data"]["descriptor"]["tickResolution"] = 1978; // TODO what does this?
     doc["data"]["descriptor"]["maxYnFrameSize"] = 32;
     doc["data"]["descriptor"]["deviceListSpecifier"] = true;
-    doc["data"]["descriptor"]["protocolVersion"] = "1.0";
-    doc["data"]["device"]["serial"] = 1234567890;
-    doc["data"]["device"]["gtin"] = 1234567890;
+    doc["data"]["descriptor"]["protocolVersion"] = "3.0";
+    //doc["data"]["device"]["serial"] = 1234567890;
+    doc["data"]["device"]["gtin"] = 9010342013607;
     doc["data"]["device"]["pcb"] = "9a";
-    doc["data"]["device"]["articleNumber"] = 1234567890;
+    doc["data"]["device"]["articleNumber"] = 89453886;
     doc["data"]["device"]["articleInfo"] = "";
     doc["data"]["device"]["productionYear"] = 2024;
     doc["data"]["device"]["productionWeek"] = 31;
