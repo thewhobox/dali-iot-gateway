@@ -103,6 +103,8 @@ static void ws_async_send(void *arg)
         esp_err_t ret = httpd_get_client_list(resp_arg->hd, &fds, client_fds);
 
         if (ret != ESP_OK) {
+            free(resp_arg->buffer);
+            free(resp_arg);
             return;
         }
 
@@ -116,6 +118,7 @@ static void ws_async_send(void *arg)
         httpd_ws_send_frame_async(resp_arg->hd, resp_arg->fd, &ws_pkt);
     }
 
+    free(resp_arg->buffer);
     free(resp_arg);
 }
 
@@ -279,6 +282,14 @@ static esp_err_t ws_handler(httpd_req_t *req)
             free(buf);
             return ret;
         }
+
+        // Only TEXT frames carry JSON; ignore control/binary frames so the
+        // JSON parser doesn't see e.g. a ping payload as garbled "input".
+        if (ws_pkt.type != HTTPD_WS_TYPE_TEXT) {
+            free(buf);
+            return ESP_OK;
+        }
+
         gw->handleData(req, ws_pkt.payload);
     }
     free(buf);
@@ -372,7 +383,9 @@ void IotGateway::receivedMonitor(uint8_t line, Dali::Frame frame)
     doc["data"]["isEcho"] = (frame.flags & DALI_FRAME_ECHO) ? true : false;
 
     uint8_t indexStart = 1;
-    if(frame.size == 16)
+    if(frame.size == 32)
+        indexStart = 0;
+    else if(frame.size == 16)
         indexStart = 2;
     else if(frame.size == 8)
         indexStart = 3;
@@ -445,6 +458,13 @@ void IotGateway::sendRawWebsocket(const char *data)
 {
     struct async_resp_arg *resp_arg = (struct async_resp_arg *)malloc(sizeof(struct async_resp_arg));
 
+    // Avoid NULL deref crash if heap is exhausted.
+    if (resp_arg == NULL)
+    {
+        fd = -1;
+        return;
+    }
+
     #ifndef IOT_GW_USE_WEBUI
     resp_arg->hd = &server; // the httpd handle
     #else
@@ -454,13 +474,26 @@ void IotGateway::sendRawWebsocket(const char *data)
     uint32_t length = strlen(data);
     resp_arg->len = length;
     char* buffer = (char*)malloc(length+1);
+    if (buffer == NULL)
+    {
+        free(resp_arg);
+        fd = -1;
+        return;
+    }
     memset(buffer, 0, length+1);
     memcpy(buffer, data, length);
     resp_arg->buffer = buffer; // a malloc'ed buffer to transmit
     resp_arg->fd = fd;
     fd = -1;
 
-    httpd_queue_work(resp_arg->hd, ws_async_send, resp_arg);
+    // If the httpd work queue is full, the item is dropped — without this
+    // check resp_arg + buffer would leak forever.
+    esp_err_t qret = httpd_queue_work(resp_arg->hd, ws_async_send, resp_arg);
+    if (qret != ESP_OK)
+    {
+        free(resp_arg->buffer);
+        free(resp_arg);
+    }
 }
 
 void IotGateway::generateInfoMessage()
