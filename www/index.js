@@ -474,13 +474,39 @@ function parse16bit(frame)
     return response;
 }
 
+function parse32bit(frame)
+{
+    console.log("parsing 32bit", frame);
+    let response = {
+        isEcho: frame.data.isEcho,
+        line: frame.data.line,
+        address: "",
+        commandDescription: "Unknown 32-bit",
+        timestamp: frame.data.timestamp,
+        error: frame.data.framingError ? frame.data.framingError : false
+    };
+
+    const firstByte = frame.data.data[0];
+
+    if(firstByte === 0xBD)
+    {
+        response.address = "IEC105";
+        const payload = frame.data.data.slice(1)
+            .map(b => b.toString(16).padStart(2, '0').toUpperCase())
+            .join(' ');
+        response.commandDescription = "Bulk Transfer (" + payload + ")";
+    }
+
+    return response;
+}
+
 function addLogEntry(frame) {
     let tableBody = document.getElementById("logTable").getElementsByTagName("tbody")[0];
     let row = tableBody.insertRow(0);
     
     let frameResponse = {};
 
-    if(frame.data.framingError || (frame.data.bits != 8 && frame.data.bits != 16 && frame.data.bits != 24 && frame.data.bits != 25))
+    if(frame.data.framingError || (frame.data.bits != 8 && frame.data.bits != 16 && frame.data.bits != 24 && frame.data.bits != 25 && frame.data.bits != 32))
     {
         frameResponse = {
             isEcho: frame.data.isEcho,
@@ -502,6 +528,11 @@ function addLogEntry(frame) {
 
             case 16:
                 frameResponse = parse16bit(frame);
+                break;
+
+            case 32:
+                lastExtended = -1;
+                frameResponse = parse32bit(frame);
                 break;
 
             default:
