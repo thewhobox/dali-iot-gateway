@@ -4,33 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dali Bus Monitor</title>
-    <link rel="stylesheet" href="#webserver#base-uri#/dali.css">
+    <link rel="stylesheet" href="/dali.css">
     <link rel='icon' href='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyAQMAAAAk8RryAAAABlBMVEUAAAD///+l2Z/dAAAARUlEQVQY02P4DwYHGJDofwyMmPQPhnrs9B8SaRzmINmH7p7/f/DQ6OD/eag+XDSa+Q8Y5OF0Azt2uv84aTQuc9Dtw+IeAJiM6TuHdsbFAAAAAElFTkSuQmCC'/>
 </head>
 <body>
-    <header>
-        <img src="https://raw.githubusercontent.com/OpenKNX/.github/main/profile/images/weiss.svg" alt="Logo" class="logo">
-        <h1>Dali Bus Monitor</h1>
-    </header>
-    <div class="status" id="status">Verbindung wird hergestellt...</div>
-    <input type="text" id="search" placeholder="Suchen..." onkeyup="filterLogs()">
-    <button id="clearButton" onclick="clearLogs()">Clear Logs</button>
-    <table id="logTable">
-        <thead>
-            <tr>
-                <th>Source</th>
-                <th>Line</th>
-                <th>Hex Data</th>
-                <th>Address</th>
-                <th style="width: auto !important">Command</th>
-                <th>Time</th>
-                <th>Date</th>
-                <th>Delta (MS)</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
+    
     <!-- // TODO this is hardcoded. Myaybe add a way to replace WEBUI_BASE_URI -->
-    <script src="#webserver#base-uri#/dali.js"></script>
+    <script src="/dali.js"></script>
 </body>
 </html>

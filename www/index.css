@@ -1,45 +1,51 @@
-body {
+/* body {
     font-family: Arial, sans-serif;
     margin: 20px;
     background-color: #f4f4f4;
+} */
+
+.container {
+    max-width: 100% !important;
 }
-table {
+
+.container  #logTable {
     width: 100%;
     border-collapse: collapse;
     margin-top: 20px;
 }
-table, th, td {
+
+.container #logTable, .container #logTable th, .container #logTable td {
     border: 1px solid #ddd;
 }
-th, td {
+.container #logTable th, .container #logTable td {
     padding: 8px 12px;
     text-align: left;
 }
-th {
+.container #logTable th {
     background-color: #f2f2f2;
     width: 1%;
 }
-tr:hover {
+.container #logTable tr:hover {
     background-color: #f9f9f9;
 }
-.error { background-color: #ffcccc; }
-.special { background-color: #a1cfff; }
-.unknown { background-color: #b4b4b4; }
-.extended { background-color: #ffbc85; }
-.command { background-color: #cce5ff; }
-.response { background-color: #d4edda; }
-#search {
+.container #logTable .error { background-color: #ffcccc; }
+.container #logTable .special { background-color: #a1cfff; }
+.container #logTable .unknown { background-color: #b4b4b4; }
+.container #logTable .extended { background-color: #ffbc85; }
+.container #logTable .command { background-color: #cce5ff; }
+.container #logTable .response { background-color: #d4edda; }
+.container #search {
     margin-bottom: 15px;
     padding: 8px;
     font-size: 14px;
     width: 100%;
     max-width: 400px;
 }
-.status {
+.container .status {
     margin-bottom: 15px;
     font-weight: bold;
 }
-#clearButton {
+.container #clearButton {
     padding: 10px;
     background-color: #f44336;
     color: white;
@@ -47,42 +53,26 @@ tr:hover {
     cursor: pointer;
     margin-top: 15px;
 }
-#clearButton:hover {
+.container #clearButton:hover {
     background-color: #d32f2f;
 }
 
-/* Logo oben rechts */
-.logo {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    width: 150px;
-    height: auto;
-}
-
-/* Header Styling */
-header {
-    position: relative;
-    padding: 10px 0;
-}
-
-
 @media (max-width: 700px) {
-    table th:nth-child(1),
-    table td:nth-child(1),
-    table th:nth-child(6),
-    table td:nth-child(6),
-    table th:nth-child(7),
-    table td:nth-child(7) {
+    .container #logTable th:nth-child(1),
+    .container #logTable td:nth-child(1),
+    .container #logTable th:nth-child(6),
+    .container #logTable td:nth-child(6),
+    .container #logTable th:nth-child(7),
+    .container #logTable td:nth-child(7) {
         display: none;
     }
 }
 
 @media (max-width: 500px) {
-    table th:nth-child(2),
-    table td:nth-child(2),
-    table th:nth-child(3),
-    table td:nth-child(3) {
+    .container #logTable th:nth-child(2),
+    .container #logTable td:nth-child(2),
+    .container #logTable th:nth-child(3),
+    .container #logTable td:nth-child(3) {
         display: none;
     }
 }

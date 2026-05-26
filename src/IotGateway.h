@@ -4,18 +4,21 @@
 #include <esp_http_server.h>
 #else
 #include "NetworkModule.h"
+#include "OpenKNX/Network/Webserver/Webserver.h"
+#include "OpenKNX/Network/Webserver/WebRequest.h"
+#include "OpenKNX/Network/Webserver/WebResponse.h"
 #endif
 
 #include "dali/Master.h"
 #include "dali/Frame.h"
 #include "ArduinoJson.h"
 
-struct async_resp_arg {
-    httpd_handle_t hd;
-    char *buffer;
-    uint16_t len;
-    int fd = -1;
-};
+// struct async_resp_arg {
+//     httpd_handle_t hd;
+//     char *buffer;
+//     uint16_t len;
+//     int fd = -1;
+// };
 
 struct wait_resp {
     uint8_t line;
@@ -38,18 +41,19 @@ class IotGateway
         void setup();
         void addMaster(Dali::Master *master);
         void receivedMonitor(uint8_t line, Dali::Frame frame);
-        void handleData(httpd_req_t *ctx, uint8_t * payload);
+        //void handleData(httpd_req_t *ctx, uint8_t * payload);
         
         void generateInfoMessage();
 
         static void responseTask(void *pvParameters);
 
     private:
+        void handleIndex(OpenKNX::Network::WebRequest& req, OpenKNX::Network::WebResponse& res);
         void sendJson(JsonDocument &doc, bool appendTimeSignature = true);
         void sendResponse(uint8_t line, uint8_t status);
         void sendAnswer(uint8_t line, uint8_t status, uint8_t answer);
         void sendRawWebsocket(const char *data);
-        #ifdef IOT_GW_USE_WEBUI
-        int pageHandler(const char *uri, WebRequest *req, void *arg);
-        #endif
+        // #ifdef IOT_GW_USE_WEBUI
+        // int pageHandler(const char *uri, WebRequest *req, void *arg);
+        // #endif
 };

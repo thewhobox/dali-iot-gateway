@@ -7,11 +7,44 @@
 #ifndef IOT_GW_USE_WEBUI
 static esp_err_t web_handler(httpd_req_t *req);
 #endif
-static esp_err_t ws_handler(httpd_req_t *req);
-static esp_err_t page_handler(const char *uri, httpd_req_t *req, void *arg);
+// static esp_err_t ws_handler(httpd_req_t *req);
+// static esp_err_t page_handler(const char *uri, httpd_req_t *req, void *arg);
+
+void IotGateway::handleIndex(OpenKNX::Network::WebRequest& req, OpenKNX::Network::WebResponse& res)
+{
+    std::string html;
+    html.reserve(2048);
+
+    html += "<div class='container'>"
+    "<h1>Dali Bus Monitor</h1>"
+    "<div class=\"status\" id=\"status\">Verbindung wird hergestellt...</div>"
+    "<input type=\"text\" id=\"search\" placeholder=\"Suchen...\" onkeyup=\"filterLogs()\">"
+    "<button id=\"clearButton\" onclick=\"clearLogs()\">Clear Logs</button>"
+    "<table id=\"logTable\">"
+        "<thead>"
+            "<tr>"
+                "<th>Source</th>"
+                "<th>Line</th>"
+                "<th>Hex Data</th>"
+                "<th>Address</th>"
+                "<th style=\"width: auto !important\">Command</th>"
+                "<th>Time</th>"
+                "<th>Date</th>"
+                "<th>Delta (MS)</th>"
+            "</tr>"
+        "</thead>"
+        "<tbody></tbody>"
+    "</table>"
+    "</div>";
+    
+    res.setLayout(true);
+    res.setActiveMenu("/dali");
+    res.send(html.c_str());
+}
 
 void IotGateway::setup()
 {
+    #ifndef IOT_GW_USE_WEBUI
     httpd_uri_t ws = {
         .uri = "/",
         .method = HTTP_GET,
@@ -20,7 +53,6 @@ void IotGateway::setup()
         .is_websocket = true
     };
 
-    #ifndef IOT_GW_USE_WEBUI
     httpd_uri_t web = {
         .uri = "/dali*",
         .method = HTTP_GET,
@@ -37,17 +69,38 @@ void IotGateway::setup()
         printf("Failed to start the server\n");
     }
     #else
-    openknxNetwork.webserver.addHandler(ws);
-    WebserverPage _page = {
-        .uri = "/dali",
-        .name = "Dali Monitor",
-        .handler = [this](const char *uri, WebRequest *req, void *arg) { return this->pageHandler(uri, req, arg); },
-        .arg = (void*)this
-    };
-    openknxNetwork.webserver.addPage(_page);
-    // openknxNetwork.webserver.addStaticFile("/dali", "text/html", file_index_html, file_index_html_len);
-    openknxNetwork.webserver.addStaticFile("/dali.css", "text/css", file_index_css, file_index_css_len);
-    openknxNetwork.webserver.addStaticFile("/dali.js", "application/javascript", file_index_js, file_index_js_len);
+    openknxNetwork.webserver.addMenuItem("Dali Monitor", "/dali");
+    openknxNetwork.webserver.addRoute(OpenKNX::Network::WEB_GET, "/dali", [this](OpenKNX::Network::WebRequest& req, OpenKNX::Network::WebResponse& res) { handleIndex(req, res); });
+
+    openknxNetwork.webserver.addStylesheet("/dali.css");
+    openknxNetwork.webserver.addRoute(OpenKNX::Network::WEB_GET, "/dali.css", openknxNetwork.webserver.Static("text/css", file_index_css, file_index_css_len));
+    openknxNetwork.webserver.addJavaScript("/dali.js");
+    openknxNetwork.webserver.addRoute(OpenKNX::Network::WEB_GET, "/dali.js", openknxNetwork.webserver.Static("application/javascript", file_index_js, file_index_js_len));
+
+    openknxNetwork.webserver.addSocket("/",
+        [this](int clientId, OpenKNX::Network::WebSocketFrame* f) {
+            printf("Received websocket message from client %d: %.*s\n", clientId, f->length, f->data);
+        },
+        [this](int clientId, bool connected) {
+            printf("Websocket client %d %s\n", clientId, connected ? "connected" : "disconnected");
+            if(connected)
+            {
+                generateInfoMessage();
+            }
+        }
+    );
+
+    // openknxNetwork.webserver.addHandler(ws);
+    // WebserverPage _page = {
+    //     .uri = "/dali",
+    //     .name = "Dali Monitor",
+    //     .handler = [this](const char *uri, WebRequest *req, void *arg) { return this->pageHandler(uri, req, arg); },
+    //     .arg = (void*)this
+    // };
+    // openknxNetwork.webserver.addPage(_page);
+    // // openknxNetwork.webserver.addStaticFile("/dali", "text/html", file_index_html, file_index_html_len);
+    // openknxNetwork.webserver.addStaticFile("/dali.css", "text/css", file_index_css, file_index_css_len);
+    // openknxNetwork.webserver.addStaticFile("/dali.js", "application/javascript", file_index_js, file_index_js_len);
     #endif
 
     xTaskCreate(responseTask, "IotGateway Response", 2096, this, 0, NULL);
@@ -84,43 +137,45 @@ void IotGateway::responseTask(void *arg)
     }
 }
 
-static void ws_async_send(void *arg)
-{
-    httpd_ws_frame_t ws_pkt;
-    struct async_resp_arg *resp_arg = (async_resp_arg*)arg;
+// #ifdef IOT_GW_USE_WEBUI
+// static void ws_async_send(void *arg)
+// {
+//     httpd_ws_frame_t ws_pkt;
+//     struct async_resp_arg *resp_arg = (async_resp_arg*)arg;
     
-    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-    ws_pkt.payload = (uint8_t*)resp_arg->buffer;
-    ws_pkt.len = resp_arg->len;
-    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+//     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+//     ws_pkt.payload = (uint8_t*)resp_arg->buffer;
+//     ws_pkt.len = resp_arg->len;
+//     ws_pkt.type = HTTPD_WS_TYPE_TEXT;
 
-    if(resp_arg->fd == -1)
-    {
-        static size_t max_clients = CONFIG_LWIP_MAX_LISTENING_TCP;
-        size_t fds = max_clients;
-        int client_fds[max_clients];
+//     if(resp_arg->fd == -1)
+//     {
+//         static size_t max_clients = CONFIG_LWIP_MAX_LISTENING_TCP;
+//         size_t fds = max_clients;
+//         int client_fds[max_clients];
 
-        esp_err_t ret = httpd_get_client_list(resp_arg->hd, &fds, client_fds);
+//         esp_err_t ret = httpd_get_client_list(resp_arg->hd, &fds, client_fds);
 
-        if (ret != ESP_OK) {
-            free(resp_arg->buffer);
-            free(resp_arg);
-            return;
-        }
+//         if (ret != ESP_OK) {
+//             free(resp_arg->buffer);
+//             free(resp_arg);
+//             return;
+//         }
 
-        for (int i = 0; i < fds; i++) {
-            int client_info = httpd_ws_get_fd_info(resp_arg->hd, client_fds[i]);
-            if (client_info == HTTPD_WS_CLIENT_WEBSOCKET) {
-                httpd_ws_send_frame_async(resp_arg->hd, client_fds[i], &ws_pkt);
-            }
-        }
-    } else {
-        httpd_ws_send_frame_async(resp_arg->hd, resp_arg->fd, &ws_pkt);
-    }
+//         for (int i = 0; i < fds; i++) {
+//             int client_info = httpd_ws_get_fd_info(resp_arg->hd, client_fds[i]);
+//             if (client_info == HTTPD_WS_CLIENT_WEBSOCKET) {
+//                 httpd_ws_send_frame_async(resp_arg->hd, client_fds[i], &ws_pkt);
+//             }
+//         }
+//     } else {
+//         httpd_ws_send_frame_async(resp_arg->hd, resp_arg->fd, &ws_pkt);
+//     }
 
-    free(resp_arg->buffer);
-    free(resp_arg);
-}
+//     free(resp_arg->buffer);
+//     free(resp_arg);
+// }
+// #endif
 
 void IotGateway::addMaster(Dali::Master *master)
 {
@@ -132,33 +187,6 @@ void IotGateway::addMaster(Dali::Master *master)
     });
 }
 
-#ifdef IOT_GW_USE_WEBUI
-int IotGateway::pageHandler(const char *uri, WebRequest *req, void *arg)
-{
-    if(strcmp(uri, "/dali") == 0)
-    {
-        req->setResponse("text/html", file_index_html, file_index_html_len);
-        req->addResponseHeader("Content-Encoding", "gzip");
-        return 0;
-    }
-//     else if(strcmp(uri, "/dali.css") == 0)
-//     {
-//         req->setResponse("text/css", file_index_css, file_index_css_len);
-//         req->addResponseHeader("Content-Encoding", "gzip");
-//         return 0;
-//     }
-//     else if(strcmp(uri, "/dali.js") == 0)
-//     {
-//         req->setResponse("application/javascript", file_index_js, file_index_js_len);
-//         req->addResponseHeader("Content-Encoding", "gzip");
-//         return 0;
-//     }
-
-    req->setStatusCode(404);
-    return -1;
-}
-#endif
-
 #ifndef IOT_GW_USE_WEBUI
 static esp_err_t web_handler(httpd_req_t *req)
 {
@@ -166,7 +194,7 @@ static esp_err_t web_handler(httpd_req_t *req)
     {
         httpd_resp_set_type(req, "text/html");
         httpd_resp_set_status(req, "200 OK");
-        httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+        //httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
         httpd_resp_send(req, file_index_html, file_index_html_len);
         return ESP_OK;
     }
@@ -174,7 +202,7 @@ static esp_err_t web_handler(httpd_req_t *req)
     {
         httpd_resp_set_type(req, "text/css");
         httpd_resp_set_status(req, "200 OK");
-        httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+        //httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
         httpd_resp_send(req, file_index_css, file_index_css_len);
         return ESP_OK;
     }
@@ -182,7 +210,7 @@ static esp_err_t web_handler(httpd_req_t *req)
     {
         httpd_resp_set_type(req, "application/javascript");
         httpd_resp_set_status(req, "200 OK");
-        httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+        //httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
         httpd_resp_send(req, file_index_js, file_index_js_len);
         return 0;
     }
@@ -192,165 +220,165 @@ static esp_err_t web_handler(httpd_req_t *req)
 }
 #endif
 
-static esp_err_t ws_handler(httpd_req_t *req)
-{
-    IotGateway *gw = (IotGateway *)req->user_ctx;
+// static esp_err_t ws_handler(httpd_req_t *req)
+// {
+//     IotGateway *gw = (IotGateway *)req->user_ctx;
 
-    if(req->method == HTTP_GET)
-    {
-        char *host = NULL;
-        char *upgrade = NULL;
-        size_t buf_len;
-        buf_len = httpd_req_get_hdr_value_len(req, "Host") + 1;
-        if (buf_len > 1)
-        {
-            host = (char*)malloc(buf_len);
-            if (httpd_req_get_hdr_value_str(req, "Host", host, buf_len) != ESP_OK)
-            {
-                /* if something is wrong we just 0 the whole memory */
-                memset(host, 0x00, buf_len);
-            }
-        }
-        if(host == NULL)
-        {
-            httpd_resp_set_status(req, "400 Bad Request");
-            httpd_resp_send(req, NULL, 0);
-            return ESP_ERR_NOT_FOUND;
-        }
+//     if(req->method == HTTP_GET)
+//     {
+//         char *host = NULL;
+//         char *upgrade = NULL;
+//         size_t buf_len;
+//         buf_len = httpd_req_get_hdr_value_len(req, "Host") + 1;
+//         if (buf_len > 1)
+//         {
+//             host = (char*)malloc(buf_len);
+//             if (httpd_req_get_hdr_value_str(req, "Host", host, buf_len) != ESP_OK)
+//             {
+//                 /* if something is wrong we just 0 the whole memory */
+//                 memset(host, 0x00, buf_len);
+//             }
+//         }
+//         if(host == NULL)
+//         {
+//             httpd_resp_set_status(req, "400 Bad Request");
+//             httpd_resp_send(req, NULL, 0);
+//             return ESP_ERR_NOT_FOUND;
+//         }
 
-        buf_len = httpd_req_get_hdr_value_len(req, "Upgrade") + 1;
-        if (buf_len > 1)
-        {
-            upgrade = (char*)malloc(buf_len);
-            if (httpd_req_get_hdr_value_str(req, "Upgrade", upgrade, buf_len) != ESP_OK)
-            {
-                /* if something is wrong we just 0 the whole memory */
-                memset(upgrade, 0x00, buf_len);
-            }
-        }
+//         buf_len = httpd_req_get_hdr_value_len(req, "Upgrade") + 1;
+//         if (buf_len > 1)
+//         {
+//             upgrade = (char*)malloc(buf_len);
+//             if (httpd_req_get_hdr_value_str(req, "Upgrade", upgrade, buf_len) != ESP_OK)
+//             {
+//                 /* if something is wrong we just 0 the whole memory */
+//                 memset(upgrade, 0x00, buf_len);
+//             }
+//         }
 
-        /* this is no websocket so we redirect it to the startpage */
-        if(upgrade == NULL)
-        {
-            httpd_resp_set_status(req, "302 Found");
-            char *redirect_url = NULL;
-            #ifndef IOT_GW_USE_WEBUI
-            asprintf(&redirect_url, "http://%s/dali", host);
-            #else
-            asprintf(&redirect_url, "http://%s%s", host, openknxNetwork.webserver.getBaseUri());
-            #endif
-            httpd_resp_set_hdr(req, "Location", redirect_url);
-            httpd_resp_send(req, NULL, 0);
+//         /* this is no websocket so we redirect it to the startpage */
+//         if(upgrade == NULL)
+//         {
+//             httpd_resp_set_status(req, "302 Found");
+//             char *redirect_url = NULL;
+//             #ifndef IOT_GW_USE_WEBUI
+//             asprintf(&redirect_url, "http://%s/dali", host);
+//             #else
+//             asprintf(&redirect_url, "http://%s%s", host, openknxNetwork.webserver.getBaseUri());
+//             #endif
+//             httpd_resp_set_hdr(req, "Location", redirect_url);
+//             httpd_resp_send(req, NULL, 0);
 
-            free(redirect_url);
-            if(host != NULL)
-                free(host);
-            return ESP_ERR_NOT_ALLOWED;
-        }
+//             free(redirect_url);
+//             if(host != NULL)
+//                 free(host);
+//             return ESP_ERR_NOT_ALLOWED;
+//         }
 
-        printf("Got new Websocket from %s\n", host);
-        free(host);
-        free(upgrade);
-        gw->fd = httpd_req_to_sockfd(req);
-        gw->generateInfoMessage();
-        return ESP_OK;
-    }
+//         printf("Got new Websocket from %s\n", host);
+//         free(host);
+//         free(upgrade);
+//         gw->fd = httpd_req_to_sockfd(req);
+//         gw->generateInfoMessage();
+//         return ESP_OK;
+//     }
 
-    httpd_ws_frame_t ws_pkt;
-    uint8_t *buf = NULL;
-    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
-    /* Set max_len = 0 to get the frame len */
-    esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
-    if (ret != ESP_OK) {
-        printf("ws_handler: httpd_ws_recv_frame failed to get frame len with %d\n", ret);
-        return ret;
-    }
+//     httpd_ws_frame_t ws_pkt;
+//     uint8_t *buf = NULL;
+//     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+//     ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+//     /* Set max_len = 0 to get the frame len */
+//     esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
+//     if (ret != ESP_OK) {
+//         printf("ws_handler: httpd_ws_recv_frame failed to get frame len with %d\n", ret);
+//         return ret;
+//     }
     
-    if (ws_pkt.len) {
-        /* ws_pkt.len + 1 is for NULL termination as we are expecting a string */
-        buf = (uint8_t*)calloc(1, ws_pkt.len + 1);
-        if (buf == NULL) {
-            printf("ws_handler: Failed to calloc memory for buf\n");
-            return ESP_ERR_NO_MEM;
-        }
-        ws_pkt.payload = buf;
-        /* Set max_len = ws_pkt.len to get the frame payload */
-        ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
-        if (ret != ESP_OK) {
-            printf("ws_handler: httpd_ws_recv_frame failed with %d\n", ret);
-            free(buf);
-            return ret;
-        }
+//     if (ws_pkt.len) {
+//         /* ws_pkt.len + 1 is for NULL termination as we are expecting a string */
+//         buf = (uint8_t*)calloc(1, ws_pkt.len + 1);
+//         if (buf == NULL) {
+//             printf("ws_handler: Failed to calloc memory for buf\n");
+//             return ESP_ERR_NO_MEM;
+//         }
+//         ws_pkt.payload = buf;
+//         /* Set max_len = ws_pkt.len to get the frame payload */
+//         ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
+//         if (ret != ESP_OK) {
+//             printf("ws_handler: httpd_ws_recv_frame failed with %d\n", ret);
+//             free(buf);
+//             return ret;
+//         }
 
-        // Only TEXT frames carry JSON; ignore control/binary frames so the
-        // JSON parser doesn't see e.g. a ping payload as garbled "input".
-        if (ws_pkt.type != HTTPD_WS_TYPE_TEXT) {
-            free(buf);
-            return ESP_OK;
-        }
+//         // Only TEXT frames carry JSON; ignore control/binary frames so the
+//         // JSON parser doesn't see e.g. a ping payload as garbled "input".
+//         if (ws_pkt.type != HTTPD_WS_TYPE_TEXT) {
+//             free(buf);
+//             return ESP_OK;
+//         }
 
-        gw->handleData(req, ws_pkt.payload);
-    }
-    free(buf);
-    return ret;
-}
+//         gw->handleData(req, ws_pkt.payload);
+//     }
+//     free(buf);
+//     return ret;
+// }
 
-void IotGateway::handleData(httpd_req_t *ctx, uint8_t * payload)
-{
-    JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, payload);
-    if (error)
-    {
-        Serial.print(F("deserializeJson() failed: "));
-        Serial.println(error.c_str());
-        return;
-    }
-    // printf("Received: %s\n", doc["type"].as<String>());
+// void IotGateway::handleData(httpd_req_t *ctx, uint8_t * payload)
+// {
+//     JsonDocument doc;
+//     DeserializationError error = deserializeJson(doc, payload);
+//     if (error)
+//     {
+//         Serial.print(F("deserializeJson() failed: "));
+//         Serial.println(error.c_str());
+//         return;
+//     }
+//     // printf("Received: %s\n", doc["type"].as<String>());
 
-    uint8_t line = doc["data"]["line"];
+//     uint8_t line = doc["data"]["line"];
 
-    // {"data":
-    //     {"daliData":[255,6],"line":0,"mode":
-    //         {"priority":4,"sendTwice":false,"waitForAnswer":false},
-    //     "numberOfBits":16},
-    // "type":"daliFrame"}
+//     // {"data":
+//     //     {"daliData":[255,6],"line":0,"mode":
+//     //         {"priority":4,"sendTwice":false,"waitForAnswer":false},
+//     //     "numberOfBits":16},
+//     // "type":"daliFrame"}
 
-    if (doc["type"] != "daliFrame")
-        return; // we only handle dali frames
+//     if (doc["type"] != "daliFrame")
+//         return; // we only handle dali frames
 
-    if(line >= masters.size()) {
-        sendResponse(line, 5);
-        return;
-    }
+//     if(line >= masters.size()) {
+//         sendResponse(line, 5);
+//         return;
+//     }
 
-    Dali::Frame frame;
-    frame.size = doc["data"]["numberOfBits"];
-    frame.flags = DALI_FRAME_FORWARD;
+//     Dali::Frame frame;
+//     frame.size = doc["data"]["numberOfBits"];
+//     frame.flags = DALI_FRAME_FORWARD;
 
-    JsonArray bytes = doc["data"]["daliData"].as<JsonArray>();
-    uint8_t index = 0;
-    for (JsonVariant value : bytes) {
-        frame.data = (frame.data << 8) | value.as<uint8_t>();
-        index++;
-    }
+//     JsonArray bytes = doc["data"]["daliData"].as<JsonArray>();
+//     uint8_t index = 0;
+//     for (JsonVariant value : bytes) {
+//         frame.data = (frame.data << 8) | value.as<uint8_t>();
+//         index++;
+//     }
 
-    uint32_t ref = masters[line]->sendRaw(frame);
-    sent.push_back(ref);
-    if(doc["data"]["mode"]["sendTwice"])
-    {
-        ref = masters[line]->sendRaw(frame);
-        sent.push_back(ref);
-    }
+//     uint32_t ref = masters[line]->sendRaw(frame);
+//     sent.push_back(ref);
+//     if(doc["data"]["mode"]["sendTwice"])
+//     {
+//         ref = masters[line]->sendRaw(frame);
+//         sent.push_back(ref);
+//     }
 
-    if(doc["data"]["mode"]["waitForAnswer"])
-    {
-        wait_resp *wresp = new wait_resp();
-        wresp->line = line;
-        wresp->ref = ref;
-        resp.push_back(wresp);
-    }
-}
+//     if(doc["data"]["mode"]["waitForAnswer"])
+//     {
+//         wait_resp *wresp = new wait_resp();
+//         wresp->line = line;
+//         wresp->ref = ref;
+//         resp.push_back(wresp);
+//     }
+// }
 
 void IotGateway::receivedMonitor(uint8_t line, Dali::Frame frame)
 {
@@ -456,44 +484,45 @@ void IotGateway::sendAnswer(uint8_t line, uint8_t status, uint8_t answer)
 
 void IotGateway::sendRawWebsocket(const char *data)
 {
-    struct async_resp_arg *resp_arg = (struct async_resp_arg *)malloc(sizeof(struct async_resp_arg));
+    openknxNetwork.webserver.sendWebsocketMessage("/", data);
+    // struct async_resp_arg *resp_arg = (struct async_resp_arg *)malloc(sizeof(struct async_resp_arg));
 
-    // Avoid NULL deref crash if heap is exhausted.
-    if (resp_arg == NULL)
-    {
-        fd = -1;
-        return;
-    }
+    // // Avoid NULL deref crash if heap is exhausted.
+    // if (resp_arg == NULL)
+    // {
+    //     fd = -1;
+    //     return;
+    // }
 
-    #ifndef IOT_GW_USE_WEBUI
-    resp_arg->hd = &server; // the httpd handle
-    #else
-    resp_arg->hd = openknxNetwork.webserver.getServerHandle(); // the httpd handle
-    #endif
+    // #ifndef IOT_GW_USE_WEBUI
+    // resp_arg->hd = &server; // the httpd handle
+    // #else
+    // //resp_arg->hd = openknxNetwork.webserver.getServerHandle(); // the httpd handle
+    // #endif
 
-    uint32_t length = strlen(data);
-    resp_arg->len = length;
-    char* buffer = (char*)malloc(length+1);
-    if (buffer == NULL)
-    {
-        free(resp_arg);
-        fd = -1;
-        return;
-    }
-    memset(buffer, 0, length+1);
-    memcpy(buffer, data, length);
-    resp_arg->buffer = buffer; // a malloc'ed buffer to transmit
-    resp_arg->fd = fd;
-    fd = -1;
+    // uint32_t length = strlen(data);
+    // resp_arg->len = length;
+    // char* buffer = (char*)malloc(length+1);
+    // if (buffer == NULL)
+    // {
+    //     free(resp_arg);
+    //     fd = -1;
+    //     return;
+    // }
+    // memset(buffer, 0, length+1);
+    // memcpy(buffer, data, length);
+    // resp_arg->buffer = buffer; // a malloc'ed buffer to transmit
+    // resp_arg->fd = fd;
+    // fd = -1;
 
     // If the httpd work queue is full, the item is dropped — without this
     // check resp_arg + buffer would leak forever.
-    esp_err_t qret = httpd_queue_work(resp_arg->hd, ws_async_send, resp_arg);
-    if (qret != ESP_OK)
-    {
-        free(resp_arg->buffer);
-        free(resp_arg);
-    }
+    // esp_err_t qret = httpd_queue_work(resp_arg->hd, ws_async_send, resp_arg);
+    // if (qret != ESP_OK)
+    // {
+    //     free(resp_arg->buffer);
+    //     free(resp_arg);
+    // }
 }
 
 void IotGateway::generateInfoMessage()
