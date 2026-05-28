@@ -80,6 +80,7 @@ void IotGateway::setup()
     openknxNetwork.webserver.addSocket("/",
         [this](int clientId, OpenKNX::Network::WebSocketFrame* f) {
             printf("Received websocket message from client %d: %.*s\n", clientId, f->length, f->data);
+            handleData(clientId, f);
         },
         [this](int clientId, bool connected) {
             printf("Websocket client %d %s\n", clientId, connected ? "connected" : "disconnected");
@@ -324,61 +325,62 @@ static esp_err_t web_handler(httpd_req_t *req)
 //     return ret;
 // }
 
-// void IotGateway::handleData(httpd_req_t *ctx, uint8_t * payload)
-// {
-//     JsonDocument doc;
-//     DeserializationError error = deserializeJson(doc, payload);
-//     if (error)
-//     {
-//         Serial.print(F("deserializeJson() failed: "));
-//         Serial.println(error.c_str());
-//         return;
-//     }
-//     // printf("Received: %s\n", doc["type"].as<String>());
+void IotGateway::handleData(int clientId, OpenKNX::Network::WebSocketFrame* f)
+{
+    
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, f->data);
+    if (error)
+    {
+        Serial.print(F("deserializeJson() failed: "));
+        Serial.println(error.c_str());
+        return;
+    }
+    // printf("Received: %s\n", doc["type"].as<String>());
 
-//     uint8_t line = doc["data"]["line"];
+    uint8_t line = doc["data"]["line"];
 
-//     // {"data":
-//     //     {"daliData":[255,6],"line":0,"mode":
-//     //         {"priority":4,"sendTwice":false,"waitForAnswer":false},
-//     //     "numberOfBits":16},
-//     // "type":"daliFrame"}
+    // {"data":
+    //     {"daliData":[255,6],"line":0,"mode":
+    //         {"priority":4,"sendTwice":false,"waitForAnswer":false},
+    //     "numberOfBits":16},
+    // "type":"daliFrame"}
 
-//     if (doc["type"] != "daliFrame")
-//         return; // we only handle dali frames
+    if (doc["type"] != "daliFrame")
+        return; // we only handle dali frames
 
-//     if(line >= masters.size()) {
-//         sendResponse(line, 5);
-//         return;
-//     }
+    if(line >= masters.size()) {
+        sendResponse(line, 5);
+        return;
+    }
 
-//     Dali::Frame frame;
-//     frame.size = doc["data"]["numberOfBits"];
-//     frame.flags = DALI_FRAME_FORWARD;
+    Dali::Frame frame;
+    frame.size = doc["data"]["numberOfBits"];
+    frame.flags = DALI_FRAME_FORWARD;
 
-//     JsonArray bytes = doc["data"]["daliData"].as<JsonArray>();
-//     uint8_t index = 0;
-//     for (JsonVariant value : bytes) {
-//         frame.data = (frame.data << 8) | value.as<uint8_t>();
-//         index++;
-//     }
+    JsonArray bytes = doc["data"]["daliData"].as<JsonArray>();
+    uint8_t index = 0;
+    for (JsonVariant value : bytes) {
+        frame.data = (frame.data << 8) | value.as<uint8_t>();
+        index++;
+    }
 
-//     uint32_t ref = masters[line]->sendRaw(frame);
-//     sent.push_back(ref);
-//     if(doc["data"]["mode"]["sendTwice"])
-//     {
-//         ref = masters[line]->sendRaw(frame);
-//         sent.push_back(ref);
-//     }
+    uint32_t ref = masters[line]->sendRaw(frame);
+    sent.push_back(ref);
+    if(doc["data"]["mode"]["sendTwice"])
+    {
+        ref = masters[line]->sendRaw(frame);
+        sent.push_back(ref);
+    }
 
-//     if(doc["data"]["mode"]["waitForAnswer"])
-//     {
-//         wait_resp *wresp = new wait_resp();
-//         wresp->line = line;
-//         wresp->ref = ref;
-//         resp.push_back(wresp);
-//     }
-// }
+    if(doc["data"]["mode"]["waitForAnswer"])
+    {
+        wait_resp *wresp = new wait_resp();
+        wresp->line = line;
+        wresp->ref = ref;
+        resp.push_back(wresp);
+    }
+}
 
 void IotGateway::receivedMonitor(uint8_t line, Dali::Frame frame)
 {
