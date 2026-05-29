@@ -365,15 +365,16 @@ void IotGateway::handleData(int clientId, OpenKNX::Network::WebSocketFrame* f)
         index++;
     }
 
-    uint32_t ref = masters[line]->sendRaw(frame);
+    bool waitForAnswer = doc["data"]["mode"]["waitForAnswer"];
+    uint32_t ref = masters[line]->sendRaw(frame, waitForAnswer);
     sent.push_back(ref);
     if(doc["data"]["mode"]["sendTwice"])
     {
-        ref = masters[line]->sendRaw(frame);
+        ref = masters[line]->sendRaw(frame, waitForAnswer);
         sent.push_back(ref);
     }
 
-    if(doc["data"]["mode"]["waitForAnswer"])
+    if(waitForAnswer)
     {
         wait_resp *wresp = new wait_resp();
         wresp->line = line;
