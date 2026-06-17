@@ -104,18 +104,19 @@ void IotGateway::setup()
     // openknxNetwork.webserver.addStaticFile("/dali.js", "application/javascript", file_index_js, file_index_js_len);
     #endif
 
-    xTaskCreate(responseTask, "IotGateway Response", 2096, this, 0, NULL);
+    xTaskCreate(responseTask, "IotGateway Response", 8192, this, 0, NULL);
 }
 
 void IotGateway::responseTask(void *arg)
 {
     IotGateway *gw = (IotGateway *)arg;
+    
     while (true)
     {
+        vTaskDelay(10 / portTICK_PERIOD_MS);
         if(gw->resp.size() > 0)
         {
             wait_resp *wresp = gw->resp.front();
-
             Dali::Response resp = gw->masters[wresp->line]->getResponse(wresp->ref);
 
             if(resp.state == Dali::ResponseState::WAITING || resp.state == Dali::ResponseState::SENT)
@@ -376,6 +377,7 @@ void IotGateway::handleData(int clientId, OpenKNX::Network::WebSocketFrame* f)
 
     if(waitForAnswer)
     {
+        printf("Waiting for answer on line %d with ref %u\n", line, ref);
         wait_resp *wresp = new wait_resp();
         wresp->line = line;
         wresp->ref = ref;
@@ -487,6 +489,7 @@ void IotGateway::sendAnswer(uint8_t line, uint8_t status, uint8_t answer)
 
 void IotGateway::sendRawWebsocket(const char *data)
 {
+    printf("Sending websocket message: %s\n", data);
     openknxNetwork.webserver.sendWebsocketMessage("/", data);
     // struct async_resp_arg *resp_arg = (struct async_resp_arg *)malloc(sizeof(struct async_resp_arg));
 
